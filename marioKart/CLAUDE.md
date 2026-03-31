@@ -61,10 +61,10 @@ void closeGame();                                         // called on shutdown 
 `GameState` is the top-level container, composed of:
 
 - `RaceState` — phase (`Boot`/`Countdown`/`Racing`/`Finished`), lap count, countdown/race timers, ranking
-- `TrackState` — centerline waypoints, checkpoints, track width, bounds
+- `TrackState` — centerline waypoints, checkpoints, road/wall width, bounds
 - `CameraState` — chase-camera position, target, distance, height
 - `DebugState` — overlay toggle, event flash timer
-- `std::vector<KartState>` — per-kart state: position, velocity, heading, speed, drift, boost timer, held item, checkpoint progress, control type (`Player`/`AI`)
+- `std::vector<KartState>` — per-kart state: position, velocity, heading, speed, drift, boost timer, held item, checkpoint progress, control type (`Player`/`AI`), off-road/wrong-way flags
 - `EventQueue` — frame-local event notifications (cleared each step)
 
 Key update flow: `createDefaultGameState()` at init → each frame: `processGameInput()` once (one-shot actions + player controls), then `updateGameScaffold()` N times at fixed 60 Hz steps → systems read/write `GameState` directly, emitting events for discrete transitions.
@@ -80,6 +80,10 @@ Flow: clear at step start → gameplay systems push events as things happen → 
 The game uses a **fixed-step simulation** at 60 Hz (`FIXED_DT` in `gameConfig.h`). Input is collected once per frame, then the simulation runs 1+ steps to catch up. Frame time is clamped to `MAX_FRAME_TIME` (100ms) to prevent spiral-of-death after debugger pauses.
 
 Input handling is split from simulation: `processGameInput()` handles one-shot actions (key presses, toggles) and writes player intent into `KartInputState`. `updateGameScaffold()` is a pure simulation step with no `platform::Input` dependency — safe to call multiple times per frame.
+
+**Player kart** uses free 2D driving physics (acceleration, braking, steering, drag) with `gameConfig.h` constants. **AI karts** follow the track centerline on rails. The player's position is projected onto the track via `queryTrackPosition()` for checkpoint and ranking calculations.
+
+**Track systems**: wall collision pushes the kart back to `wallHalfWidth` from the centerline and reduces speed. Off-road detection triggers when lateral distance exceeds `roadHalfWidth`, reducing max speed and acceleration. Wrong-way detection compares kart heading to track forward direction over a sustained period.
 
 ## Libraries (in `thirdparty/`)
 
@@ -117,7 +121,7 @@ Access via `platform::Input &input` in `gameLogic()`:
 - `renderer::init()` / `renderer::close()` — shader compilation, VAO/VBO lifecycle
 - `renderer::beginFrame(camera, w, h)` — builds view/projection from `CameraState`, enables depth test
 - `renderer::drawQuad(center, size, color, rotationY)` — flat XZ-plane quad
-- `renderer::drawBox(center, size, color)` — axis-aligned 3D box
+- `renderer::drawBox(center, size, color, rotationY)` — 3D box with optional Y rotation
 - `renderer::drawLine(start, end, color)` / `renderer::drawMarker(pos, size, color)` — debug primitives
 
 Shaders: `vertex.vert` transforms `vec3` positions by `u_mat` (projection * view * model); `fragment.frag` outputs flat `u_color`. The 2D HUD overlay uses a scissor+glClear trick (no geometry), rendered after disabling depth test.

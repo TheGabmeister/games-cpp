@@ -12,12 +12,20 @@ This repository is a small C++17/CMake OpenGL game template centered around GLFW
 - `include/platform/`: platform-layer headers.
 - `resources/`: runtime assets loaded through `RESOURCES_PATH`.
 - `thirdparty/`: vendored dependencies. Do not modify these unless the task explicitly requires it.
+- `SPEC.md`: the current feature/specification roadmap for the Mario Kart-inspired game. Use this as the source of truth for scope and milestone order when implementing gameplay systems.
 
 ## Main entry points
 
 - `src/platform/glfwMain.cpp`: application startup, GLFW/OpenGL setup, the main loop, fullscreen handling, and platform file helpers.
 - `src/gameLayer/gameLayer.cpp`: game-layer implementation. This is where `initGame()`, `gameLogic()`, and `closeGame()` live.
 - `include/gameLayer/gameLayer.h`: public game-layer declarations plus the platform functions exposed to gameplay code.
+
+Current important game-layer support files:
+
+- `include/gameLayer/gameState.h` / `src/gameLayer/gameState.cpp`: persistent gameplay state, race scaffold logic, and early race-flow updates.
+- `include/gameLayer/gameEvents.h` / `src/gameLayer/gameEvents.cpp`: lightweight event queue and event type definitions.
+- `include/gameLayer/gameConfig.h`: centralized gameplay constants/configuration values.
+- `include/gameLayer/renderer.h` / `src/gameLayer/renderer.cpp`: game-layer rendering helpers.
 
 The main gameplay API is:
 
@@ -82,6 +90,13 @@ Useful platform functions exposed through `gameLayer.h` include:
 - `platform::showMouse()`
 - `platform::writeEntireFile()` / `platform::readEntireFile()` / `platform::appendToFile()`
 
+## Current gameplay scaffold
+
+- The repo already has a Phase 0.x gameplay scaffold rather than the original sample rectangle demo.
+- The outer frame loop is still owned by `src/platform/glfwMain.cpp`.
+- The per-frame gameplay update currently enters through `gameLogic()` and then into game-layer systems/state helpers.
+- A fixed-step gameplay loop is planned in `SPEC.md` but is not automatically present unless implemented as part of the current task. Do not assume the project already has it.
+
 ## Validation
 
 - There are no dedicated automated tests in this repo today.
@@ -94,5 +109,6 @@ Useful platform functions exposed through `gameLayer.h` include:
 - Keep changes scoped; avoid incidental refactors in platform or third-party code.
 - If you add files and the IDE offers to edit CMake source lists automatically, decline it.
 - Be careful with serialized data in `resources/gameData.data`; changing the layout of persisted structs can invalidate existing saved data.
+- Keep AGENTS/spec guidance aligned with the current codebase. If you substantially change architecture or milestone expectations, update `AGENTS.md` and/or `SPEC.md` in the same task when appropriate.
 - `thirdparty/` contains vendored libraries such as GLFW, GLAD, glm, stb, and raudio. Treat them as read-only unless the task explicitly targets dependency code.
 - On MSVC builds, expect `/arch:AVX2`, static runtime linking, `/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup`, and Unicode to be force-disabled in `CMakeLists.txt`.

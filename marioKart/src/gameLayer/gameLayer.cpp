@@ -10,14 +10,18 @@
 #include <glui/glui.h>
 #include <logs.h>
 
-namespace
+struct GameContext
 {
-	GameState gameData = {};
+	GameState game = {};
 	float simulationAccumulator = 0.f;
-
 	gl2d::Renderer2D renderer2d;
 	gl2d::Font menuFont;
 	glui::RendererUi menuUi;
+};
+
+namespace
+{
+	GameContext ctx = {};
 
 	struct ScreenRect
 	{
@@ -100,7 +104,6 @@ namespace
 			glm::vec3 center = (start + end) * 0.5f;
 			float angle = std::atan2(delta.x, delta.z);
 
-			glm::vec3 wallColorInner = {0.6f, 0.6f, 0.65f};
 			glm::vec3 wallColorOuter = {0.45f, 0.15f, 0.15f};
 
 			// Inner wall (road edge markers)
@@ -150,14 +153,14 @@ namespace
 		}
 
 		// Hazards (bananas)
-		for (const Hazard &haz : game.hazards)
+		for (const Hazard &haz : game.entities.hazards)
 		{
 			if (!haz.alive) { continue; }
 			renderer::drawBox(haz.position, {0.6f, 0.5f, 0.6f}, {0.95f, 0.85f, 0.15f});
 		}
 
 		// Projectiles
-		for (const Projectile &proj : game.projectiles)
+		for (const Projectile &proj : game.entities.projectiles)
 		{
 			if (!proj.alive) { continue; }
 			glm::vec3 color = (proj.type == ItemType::GreenShell)
@@ -167,25 +170,25 @@ namespace
 		}
 
 		// Karts
-		for (int i = 0; i < static_cast<int>(game.karts.size()); ++i)
+		for (int i = 0; i < static_cast<int>(game.entities.karts.size()); ++i)
 		{
-			const KartState &kart = game.karts[i];
+			const KartState &kart = game.entities.karts[i];
 			glm::vec3 kartCenter = kart.position + glm::vec3{0.f, 0.4f, 0.f};
 			float kartRotation = -kart.heading + glm::radians(90.f);
 			renderer::drawBox(kartCenter, {1.2f, 0.8f, 2.0f}, kart.color, kartRotation);
 		}
 	}
 
-	void drawMainMenu(int w, int h, const GameState &game)
+	void drawMainMenu(const GameState &game, gl2d::Renderer2D &r2d, gl2d::Font &font, int w, int h)
 	{
-		renderer2d.updateWindowMetrics(w, h);
-		renderer2d.clearDrawData();
+		r2d.updateWindowMetrics(w, h);
+		r2d.clearDrawData();
 
 		float centerX = w / 2.f;
 
 		// Title
-		glui::renderText(renderer2d, "KART RACER",
-			menuFont, {centerX - 180, h * 0.15f, 360, 80},
+		glui::renderText(r2d, "KART RACER",
+			font, {centerX - 180, h * 0.15f, 360, 80},
 			{1.f, 1.f, 1.f, 1.f}, false, true);
 
 		// Color banner: row of kart palette swatches
@@ -197,29 +200,29 @@ namespace
 		{
 			glm::vec3 c = getKartPaletteColor(i);
 			float x = startX + i * (swatchSize + gap);
-			renderer2d.renderRectangle({x, h * 0.35f, swatchSize, swatchSize},
+			r2d.renderRectangle({x, h * 0.35f, swatchSize, swatchSize},
 				{c.r, c.g, c.b, 1.f});
 		}
 
 		// Pulsing "PRESS ENTER" prompt
 		float pulse = 0.6f + 0.4f * std::sin(game.pulseTimer * MENU_PULSE_SPEED);
-		glui::renderText(renderer2d, "PRESS ENTER",
-			menuFont, {centerX - 140, h * 0.55f, 280, 50},
+		glui::renderText(r2d, "PRESS ENTER",
+			font, {centerX - 140, h * 0.55f, 280, 50},
 			{pulse, pulse, pulse, 1.f}, false, true);
 
-		renderer2d.flush();
+		r2d.flush();
 	}
 
-	void drawKartSelect(int w, int h, const GameState &game)
+	void drawKartSelect(const GameState &game, gl2d::Renderer2D &r2d, gl2d::Font &font, int w, int h)
 	{
-		renderer2d.updateWindowMetrics(w, h);
-		renderer2d.clearDrawData();
+		r2d.updateWindowMetrics(w, h);
+		r2d.clearDrawData();
 
 		float centerX = w / 2.f;
 
 		// Title
-		glui::renderText(renderer2d, "SELECT KART",
-			menuFont, {centerX - 160, h * 0.08f, 320, 60},
+		glui::renderText(r2d, "SELECT KART",
+			font, {centerX - 160, h * 0.08f, 320, 60},
 			{1.f, 1.f, 1.f, 1.f}, false, true);
 
 		// Color palette strip
@@ -236,24 +239,24 @@ namespace
 
 			if (i == game.menu.selectedKartSlot)
 			{
-				renderer2d.renderRectangle(
+				r2d.renderRectangle(
 					{x - 4, paletteY - 4, swatchSize + 8, swatchSize + 8},
 					{1.f, 1.f, 1.f, 1.f});
 			}
 
-			renderer2d.renderRectangle({x, paletteY, swatchSize, swatchSize},
+			r2d.renderRectangle({x, paletteY, swatchSize, swatchSize},
 				{c.r, c.g, c.b, 1.f});
 		}
 
 		// Arrow indicators
-		glui::renderText(renderer2d, "<",
-			menuFont, {startX - 40, paletteY - 4, 30, swatchSize + 8},
+		glui::renderText(r2d, "<",
+			font, {startX - 40, paletteY - 4, 30, swatchSize + 8},
 			{0.8f, 0.8f, 0.8f, 1.f}, false, true);
-		glui::renderText(renderer2d, ">",
-			menuFont, {startX + totalWidth + 10, paletteY - 4, 30, swatchSize + 8},
+		glui::renderText(r2d, ">",
+			font, {startX + totalWidth + 10, paletteY - 4, 30, swatchSize + 8},
 			{0.8f, 0.8f, 0.8f, 1.f}, false, true);
 
-		renderer2d.flush();
+		r2d.flush();
 
 		// 3D kart preview
 		{
@@ -275,18 +278,18 @@ namespace
 		glDisable(GL_DEPTH_TEST);
 		glUseProgram(0);
 
-		renderer2d.clearDrawData();
+		r2d.clearDrawData();
 
 		float pulse = 0.5f + 0.5f * std::sin(game.pulseTimer * MENU_PULSE_SPEED);
-		glui::renderText(renderer2d, "ENTER TO CONFIRM",
-			menuFont, {centerX - 160, h * 0.82f, 320, 40},
+		glui::renderText(r2d, "ENTER TO CONFIRM",
+			font, {centerX - 160, h * 0.82f, 320, 40},
 			{0.95f * pulse, 0.84f * pulse, 0.22f * pulse, 1.f}, false, true);
 
-		glui::renderText(renderer2d, "ESC TO GO BACK",
-			menuFont, {centerX - 130, h * 0.9f, 260, 30},
+		glui::renderText(r2d, "ESC TO GO BACK",
+			font, {centerX - 130, h * 0.9f, 260, 30},
 			{0.5f, 0.5f, 0.5f, 1.f}, false, true);
 
-		renderer2d.flush();
+		r2d.flush();
 	}
 
 	const char *getPlaceSuffix(int place)
@@ -321,41 +324,41 @@ namespace
 		}
 	}
 
-	void drawHud(int w, int h)
+	void drawHud(const GameState &game, gl2d::Renderer2D &r2d, gl2d::Font &font, int w, int h)
 	{
-		if (!gameData.debug.showOverlay)
+		if (!game.debug.showOverlay)
 		{
 			return;
 		}
 
-		const KartState &playerKart = gameData.karts[gameData.race.playerKartIndex];
+		const KartState &playerKart = game.entities.karts[game.race.playerKartIndex];
 
-		renderer2d.updateWindowMetrics(w, h);
-		renderer2d.clearDrawData();
+		r2d.updateWindowMetrics(w, h);
+		r2d.clearDrawData();
 
 		char buf[64] = {};
 
 		// Position (top-left)
 		{
-			int place = gameData.race.playerPlace;
+			int place = game.race.playerPlace;
 			glm::vec4 placeColor = (place <= 1) ? glm::vec4(0.95f, 0.84f, 0.22f, 1.f)
 				: (place <= 3) ? glm::vec4(0.78f, 0.78f, 0.82f, 1.f)
 				: glm::vec4(0.65f, 0.45f, 0.3f, 1.f);
 
 			std::snprintf(buf, sizeof(buf), "%d%s", place, getPlaceSuffix(place));
-			glui::renderText(renderer2d, buf, menuFont,
+			glui::renderText(r2d, buf, font,
 				{16, 10, 80, 42}, placeColor, false, false);
 
-			std::snprintf(buf, sizeof(buf), "/ %d", static_cast<int>(gameData.karts.size()));
-			glui::renderText(renderer2d, buf, menuFont,
+			std::snprintf(buf, sizeof(buf), "/ %d", static_cast<int>(game.entities.karts.size()));
+			glui::renderText(r2d, buf, font,
 				{100, 22, 50, 22}, {0.6f, 0.6f, 0.6f, 1.f}, false, false);
 		}
 
 		// Lap counter (top-right)
 		{
-			int lap = std::min(playerKart.progress.currentLap + 1, gameData.race.totalLaps);
-			std::snprintf(buf, sizeof(buf), "LAP %d/%d", lap, gameData.race.totalLaps);
-			glui::renderText(renderer2d, buf, menuFont,
+			int lap = std::min(playerKart.progress.currentLap + 1, game.race.totalLaps);
+			std::snprintf(buf, sizeof(buf), "LAP %d/%d", lap, game.race.totalLaps);
+			glui::renderText(r2d, buf, font,
 				{static_cast<float>(w - 160), 10, 144, 32}, {0.95f, 0.84f, 0.22f, 1.f}, false, true);
 		}
 
@@ -366,19 +369,19 @@ namespace
 			float barH = 14.f;
 			float barX = 20.f;
 			float barY = h - 60.f;
-			renderer2d.renderRectangle({barX, barY, barW, barH}, {0.16f, 0.16f, 0.18f, 1.f});
-			renderer2d.renderRectangle({barX, barY, barW * speedRatio, barH},
+			r2d.renderRectangle({barX, barY, barW, barH}, {0.16f, 0.16f, 0.18f, 1.f});
+			r2d.renderRectangle({barX, barY, barW * speedRatio, barH},
 				{playerKart.color.r, playerKart.color.g, playerKart.color.b, 1.f});
 
 			std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(std::abs(playerKart.speed)));
-			glui::renderText(renderer2d, buf, menuFont,
+			glui::renderText(r2d, buf, font,
 				{barX + barW + 8, barY - 2, 40, barH + 4}, {0.85f, 0.85f, 0.85f, 1.f}, false, false);
 		}
 
 		// Boost indicator (bottom-left, above speed bar)
 		if (playerKart.boostTimer > 0.f)
 		{
-			glui::renderText(renderer2d, "BOOST", menuFont,
+			glui::renderText(r2d, "BOOST", font,
 				{20, static_cast<float>(h - 80), 70, 18}, {0.95f, 0.55f, 0.1f, 1.f}, false, false);
 		}
 
@@ -386,11 +389,11 @@ namespace
 		if (playerKart.driftState == DriftState::Drifting)
 		{
 			float driftAlpha = (playerKart.driftTimer >= MINI_TURBO_MIN_DRIFT_TIME)
-				? 0.5f + 0.5f * std::sin(gameData.pulseTimer * 12.f) : 0.8f;
+				? 0.5f + 0.5f * std::sin(game.pulseTimer * 12.f) : 0.8f;
 			glm::vec4 driftColor = (playerKart.driftTimer >= MINI_TURBO_MIN_DRIFT_TIME)
 				? glm::vec4(0.95f, 0.55f, 0.1f, driftAlpha)
 				: glm::vec4(0.6f, 0.6f, 0.65f, driftAlpha);
-			glui::renderText(renderer2d, "DRIFT", menuFont,
+			glui::renderText(r2d, "DRIFT", font,
 				{20, static_cast<float>(h - 98), 60, 16}, driftColor, false, false);
 		}
 
@@ -401,53 +404,53 @@ namespace
 			float itemX = w / 2.f - itemBoxSize / 2.f;
 			float itemY = h - 56.f;
 			glm::vec4 itemColor = getItemColor4(playerKart.heldItem);
-			renderer2d.renderRectangle({itemX - 3, itemY - 3, itemBoxSize + 6, itemBoxSize + 6},
+			r2d.renderRectangle({itemX - 3, itemY - 3, itemBoxSize + 6, itemBoxSize + 6},
 				{0.12f, 0.12f, 0.14f, 1.f});
-			renderer2d.renderRectangle({itemX, itemY, itemBoxSize, itemBoxSize}, itemColor);
+			r2d.renderRectangle({itemX, itemY, itemBoxSize, itemBoxSize}, itemColor);
 
-			glui::renderText(renderer2d, getItemName(playerKart.heldItem), menuFont,
+			glui::renderText(r2d, getItemName(playerKart.heldItem), font,
 				{w / 2.f - 60, itemY - 20, 120, 16}, itemColor, false, true);
 		}
 
 		// Countdown (center)
-		if (gameData.race.phase == RacePhase::Countdown)
+		if (game.race.phase == RacePhase::Countdown)
 		{
-			int countNum = static_cast<int>(std::ceil(gameData.race.countdownTimer));
+			int countNum = static_cast<int>(std::ceil(game.race.countdownTimer));
 			if (countNum > 0)
 			{
 				std::snprintf(buf, sizeof(buf), "%d", countNum);
-				float scale = 1.f + 0.3f * (gameData.race.countdownTimer - std::floor(gameData.race.countdownTimer));
+				float scale = 1.f + 0.3f * (game.race.countdownTimer - std::floor(game.race.countdownTimer));
 				float size = 80 * scale;
-				glui::renderText(renderer2d, buf, menuFont,
+				glui::renderText(r2d, buf, font,
 					{w / 2.f - size / 2, h * 0.3f, size, size},
 					{0.95f, 0.95f, 0.95f, 1.f}, false, true);
 			}
 		}
-		else if (gameData.race.phase == RacePhase::Racing && gameData.race.raceTimer < 1.5f)
+		else if (game.race.phase == RacePhase::Racing && game.race.raceTimer < 1.5f)
 		{
-			float alpha = 1.f - gameData.race.raceTimer / 1.5f;
-			glui::renderText(renderer2d, "GO!", menuFont,
+			float alpha = 1.f - game.race.raceTimer / 1.5f;
+			glui::renderText(r2d, "GO!", font,
 				{w / 2.f - 50, h * 0.3f, 100, 80},
 				{0.18f, 0.85f, 0.34f, alpha}, false, true);
 		}
 
 		// Race timer (top-center)
-		if (gameData.race.phase == RacePhase::Racing || gameData.race.phase == RacePhase::Finished)
+		if (game.race.phase == RacePhase::Racing || game.race.phase == RacePhase::Finished)
 		{
-			int totalSeconds = static_cast<int>(gameData.race.raceTimer);
+			int totalSeconds = static_cast<int>(game.race.raceTimer);
 			int minutes = totalSeconds / 60;
 			int seconds = totalSeconds % 60;
-			int hundredths = static_cast<int>((gameData.race.raceTimer - totalSeconds) * 100);
+			int hundredths = static_cast<int>((game.race.raceTimer - totalSeconds) * 100);
 			std::snprintf(buf, sizeof(buf), "%d:%02d.%02d", minutes, seconds, hundredths);
-			glui::renderText(renderer2d, buf, menuFont,
+			glui::renderText(r2d, buf, font,
 				{w / 2.f - 60, 10, 120, 26}, {0.85f, 0.85f, 0.85f, 1.f}, false, true);
 		}
 
 		// Wrong-way warning (center)
 		if (playerKart.wrongWay)
 		{
-			float flash = 0.5f + 0.5f * std::sin(gameData.pulseTimer * 8.f);
-			glui::renderText(renderer2d, "WRONG WAY!", menuFont,
+			float flash = 0.5f + 0.5f * std::sin(game.pulseTimer * 8.f);
+			glui::renderText(r2d, "WRONG WAY!", font,
 				{w / 2.f - 100, h * 0.22f, 200, 40},
 				{0.95f, 0.2f, 0.2f, flash}, false, true);
 		}
@@ -455,16 +458,16 @@ namespace
 		// Respawn indicator
 		if (playerKart.respawnTimer > 0.f)
 		{
-			float alpha = 0.5f + 0.5f * std::sin(gameData.pulseTimer * 10.f);
-			glui::renderText(renderer2d, "RESPAWNING...", menuFont,
+			float alpha = 0.5f + 0.5f * std::sin(game.pulseTimer * 10.f);
+			glui::renderText(r2d, "RESPAWNING...", font,
 				{w / 2.f - 100, h * 0.55f, 200, 30},
 				{0.85f, 0.85f, 0.9f, alpha}, false, true);
 		}
 
 		// Off-road indicator
-		if (playerKart.offRoad && gameData.race.phase == RacePhase::Racing && !playerKart.wrongWay)
+		if (playerKart.offRoad && game.race.phase == RacePhase::Racing && !playerKart.wrongWay)
 		{
-			glui::renderText(renderer2d, "OFF ROAD", menuFont,
+			glui::renderText(r2d, "OFF ROAD", font,
 				{20, static_cast<float>(h - 116), 80, 14}, {0.55f, 0.4f, 0.2f, 0.8f}, false, false);
 		}
 
@@ -472,18 +475,18 @@ namespace
 		{
 			float colX = w - 30.f;
 			float colY = 50.f;
-			for (int rank = 0; rank < static_cast<int>(gameData.race.ranking.size()); ++rank)
+			for (int rank = 0; rank < static_cast<int>(game.race.ranking.size()); ++rank)
 			{
-				int kartIndex = gameData.race.ranking[rank];
+				int kartIndex = game.race.ranking[rank];
 				float barHeight = 18.f + std::max(0.f, 16.f - rank * 2.f);
-				glm::vec3 c = gameData.karts[kartIndex].color;
-				renderer2d.renderRectangle(
+				glm::vec3 c = game.entities.karts[kartIndex].color;
+				r2d.renderRectangle(
 					{colX - rank * 18.f, colY, 14.f, barHeight},
 					{c.r, c.g, c.b, 1.f});
 			}
 		}
 
-		renderer2d.flush();
+		r2d.flush();
 	}
 }
 
@@ -496,10 +499,10 @@ bool initGame()
 	}
 
 	gl2d::init();
-	renderer2d.create();
-	menuFont.createFromFile(RESOURCES_PATH "roboto_black.ttf");
+	ctx.renderer2d.create();
+	ctx.menuFont.createFromFile(RESOURCES_PATH "roboto_black.ttf");
 
-	gameData = createDefaultGameState();
+	ctx.game = createDefaultGameState();
 	platform::log("Init Phase 0.2 primitive renderer");
 
 	return true;
@@ -517,51 +520,51 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	int w = platform::getFrameBufferSizeX();
 	int h = platform::getFrameBufferSizeY();
 
-	processGameInput(gameData, input);
+	processGameInput(ctx.game, input);
 
 	float frameDt = glm::min(deltaTime, MAX_FRAME_TIME);
-	simulationAccumulator += frameDt;
-	while (simulationAccumulator >= FIXED_DT)
+	ctx.simulationAccumulator += frameDt;
+	while (ctx.simulationAccumulator >= FIXED_DT)
 	{
-		updateGameScaffold(gameData, FIXED_DT);
-		simulationAccumulator -= FIXED_DT;
+		updateGameScaffold(ctx.game, FIXED_DT);
+		ctx.simulationAccumulator -= FIXED_DT;
 	}
 
 	glViewport(0, 0, w, h);
 	glClearColor(0.07f, 0.1f, 0.14f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	if (gameData.race.phase == RacePhase::MainMenu)
+	if (ctx.game.race.phase == RacePhase::MainMenu)
 	{
-		drawMainMenu(w, h, gameData);
+		drawMainMenu(ctx.game, ctx.renderer2d, ctx.menuFont, w, h);
 	}
-	else if (gameData.race.phase == RacePhase::KartSelect)
+	else if (ctx.game.race.phase == RacePhase::KartSelect)
 	{
-		drawKartSelect(w, h, gameData);
+		drawKartSelect(ctx.game, ctx.renderer2d, ctx.menuFont, w, h);
 	}
 	else
 	{
-		renderer::beginFrame(gameData.camera, w, h);
-		drawWorld3D(gameData);
+		renderer::beginFrame(ctx.game.camera, w, h);
+		drawWorld3D(ctx.game);
 
 		glDisable(GL_DEPTH_TEST);
 		glUseProgram(0);
 
-		drawHud(w, h);
+		drawHud(ctx.game, ctx.renderer2d, ctx.menuFont, w, h);
 
-		if (gameData.race.phase == RacePhase::Finished)
+		if (ctx.game.race.phase == RacePhase::Finished)
 		{
-			renderer2d.updateWindowMetrics(w, h);
-			renderer2d.clearDrawData();
-			float pulse = 0.5f + 0.5f * std::sin(gameData.pulseTimer * MENU_PULSE_SPEED);
+			ctx.renderer2d.updateWindowMetrics(w, h);
+			ctx.renderer2d.clearDrawData();
+			float pulse = 0.5f + 0.5f * std::sin(ctx.game.pulseTimer * MENU_PULSE_SPEED);
 			float cx = w / 2.f;
-			glui::renderText(renderer2d, "RACE FINISHED!",
-				menuFont, {cx - 160, h * 0.35f, 320, 60},
+			glui::renderText(ctx.renderer2d, "RACE FINISHED!",
+				ctx.menuFont, {cx - 160, h * 0.35f, 320, 60},
 				{0.95f, 0.84f, 0.22f, 1.f}, false, true);
-			glui::renderText(renderer2d, "PRESS ENTER",
-				menuFont, {cx - 130, h * 0.48f, 260, 40},
+			glui::renderText(ctx.renderer2d, "PRESS ENTER",
+				ctx.menuFont, {cx - 130, h * 0.48f, 260, 40},
 				{pulse, pulse, pulse, 1.f}, false, true);
-			renderer2d.flush();
+			ctx.renderer2d.flush();
 		}
 	}
 
@@ -571,8 +574,8 @@ bool gameLogic(float deltaTime, platform::Input &input)
 //This function might not be be called if the program is forced closed
 void closeGame()
 {
-	menuFont.cleanup();
-	renderer2d.cleanup();
+	ctx.menuFont.cleanup();
+	ctx.renderer2d.cleanup();
 	gl2d::cleanup();
 	renderer::close();
 	platform::log("Close Phase 0.2 primitive renderer");

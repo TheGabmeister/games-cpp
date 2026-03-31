@@ -15,9 +15,9 @@ namespace
 	void updateRaceRanking(GameState &game)
 	{
 		game.race.ranking.clear();
-		game.race.ranking.reserve(game.karts.size());
+		game.race.ranking.reserve(game.entities.karts.size());
 
-		for (int i = 0; i < static_cast<int>(game.karts.size()); ++i)
+		for (int i = 0; i < static_cast<int>(game.entities.karts.size()); ++i)
 		{
 			game.race.ranking.push_back(i);
 		}
@@ -25,8 +25,8 @@ namespace
 		std::sort(game.race.ranking.begin(), game.race.ranking.end(),
 			[&](int leftIndex, int rightIndex)
 			{
-				const KartState &left = game.karts[leftIndex];
-				const KartState &right = game.karts[rightIndex];
+				const KartState &left = game.entities.karts[leftIndex];
+				const KartState &right = game.entities.karts[rightIndex];
 
 				if (left.progress.finished != right.progress.finished)
 				{
@@ -114,14 +114,14 @@ GameState createDefaultGameState()
 	float laneOffsets[KART_PALETTE_COUNT] = {-2.5f, -0.8f, 0.9f, 2.6f, -1.8f, 1.6f, -3.2f, 3.4f};
 	float baseSpeeds[KART_PALETTE_COUNT] = {12.f, 12.8f, 12.5f, 13.0f, 12.3f, 12.7f, 12.2f, 13.2f};
 
-	game.karts.resize(KART_PALETTE_COUNT);
+	game.entities.karts.resize(KART_PALETTE_COUNT);
 	for (int i = 0; i < KART_PALETTE_COUNT; ++i)
 	{
-		game.karts[i].controlType = (i == 0) ? KartControlType::Player : KartControlType::AI;
-		game.karts[i].color = getKartPaletteColor(i);
-		game.karts[i].laneOffset = laneOffsets[i];
-		game.karts[i].baseSpeed = baseSpeeds[i];
-		game.karts[i].distanceAlongTrack = i * 1.6f;
+		game.entities.karts[i].controlType = (i == 0) ? KartControlType::Player : KartControlType::AI;
+		game.entities.karts[i].color = getKartPaletteColor(i);
+		game.entities.karts[i].laneOffset = laneOffsets[i];
+		game.entities.karts[i].baseSpeed = baseSpeeds[i];
+		game.entities.karts[i].distanceAlongTrack = i * 1.6f;
 	}
 
 	game.race.phase = RacePhase::MainMenu;
@@ -143,9 +143,9 @@ void resetRace(GameState &game)
 	game.race.totalLaps = 3;
 	game.race.ranking.clear();
 
-	for (int i = 0; i < static_cast<int>(game.karts.size()); ++i)
+	for (int i = 0; i < static_cast<int>(game.entities.karts.size()); ++i)
 	{
-		KartState &kart = game.karts[i];
+		KartState &kart = game.entities.karts[i];
 		kart.speed = 0.f;
 		kart.desiredSpeed = kart.baseSpeed;
 		kart.boostTimer = 0.f;
@@ -168,8 +168,8 @@ void resetRace(GameState &game)
 		kart.progress.segmentProgress = getSegmentProgress(kart, game.track);
 	}
 
-	game.projectiles.clear();
-	game.hazards.clear();
+	game.entities.projectiles.clear();
+	game.entities.hazards.clear();
 	for (ItemBox &box : game.track.itemBoxes) { box.active = true; box.respawnTimer = 0.f; }
 
 	updateRaceRanking(game);
@@ -206,14 +206,14 @@ void processGameInput(GameState &game, platform::Input &input)
 			input.isButtonPressed(platform::Button::Space))
 		{
 			glm::vec3 chosenColor = getKartPaletteColor(game.menu.selectedKartSlot);
-			glm::vec3 oldPlayerColor = game.karts[0].color;
-			game.karts[0].color = chosenColor;
+			glm::vec3 oldPlayerColor = game.entities.karts[0].color;
+			game.entities.karts[0].color = chosenColor;
 
-			for (int i = 1; i < static_cast<int>(game.karts.size()); ++i)
+			for (int i = 1; i < static_cast<int>(game.entities.karts.size()); ++i)
 			{
-				if (game.karts[i].color == chosenColor)
+				if (game.entities.karts[i].color == chosenColor)
 				{
-					game.karts[i].color = oldPlayerColor;
+					game.entities.karts[i].color = oldPlayerColor;
 					break;
 				}
 			}
@@ -247,7 +247,7 @@ void processGameInput(GameState &game, platform::Input &input)
 		resetRace(game);
 	}
 
-	for (KartState &kart : game.karts)
+	for (KartState &kart : game.entities.karts)
 	{
 		if (kart.controlType == KartControlType::Player)
 		{
@@ -298,9 +298,9 @@ void updateGameScaffold(GameState &game, float deltaTime)
 		game.race.finishedTimer += deltaTime;
 	}
 
-	for (int i = 0; i < static_cast<int>(game.karts.size()); ++i)
+	for (int i = 0; i < static_cast<int>(game.entities.karts.size()); ++i)
 	{
-		KartState &kart = game.karts[i];
+		KartState &kart = game.entities.karts[i];
 		bool frozen = (game.race.phase == RacePhase::Countdown || game.race.phase == RacePhase::Finished);
 		float previousDistance = kart.distanceAlongTrack;
 
@@ -446,7 +446,7 @@ void updateGameScaffold(GameState &game, float deltaTime)
 			kart.position.y = 0.f;
 
 			// Track query: wall collision, off-road, and distance
-			TrackQuery q = queryTrackPosition(kart.position, game.track);
+			TrackQuery q = queryTrackPosition(kart.position, game.track, &kart.lastSegmentHint);
 			kart.distanceAlongTrack = q.distanceAlongTrack;
 
 			if (q.lateralDistance > game.track.wallHalfWidth)
@@ -512,7 +512,7 @@ void updateGameScaffold(GameState &game, float deltaTime)
 					kart.stuckTimer = 0.f;
 					kart.respawnTimer = RESPAWN_FREEZE_TIME;
 
-					TrackQuery rq = queryTrackPosition(kart.position, game.track);
+					TrackQuery rq = queryTrackPosition(kart.position, game.track, &kart.lastSegmentHint);
 					kart.distanceAlongTrack = rq.distanceAlongTrack;
 
 					game.events.push({GameEventType::RespawnRequested, i});
@@ -536,7 +536,7 @@ void updateGameScaffold(GameState &game, float deltaTime)
 			}
 
 			// Rubber-banding: adjust speed based on distance to player
-			const KartState &playerKart = game.karts[game.race.playerKartIndex];
+			const KartState &playerKart = game.entities.karts[game.race.playerKartIndex];
 			float playerDist = playerKart.distanceAlongTrack
 				+ playerKart.progress.currentLap * game.track.totalLength;
 			float aiDist = kart.distanceAlongTrack
@@ -694,7 +694,7 @@ void updateGameScaffold(GameState &game, float deltaTime)
 	updateItemSystems(game, deltaTime);
 
 	// Chase camera with spring smoothing
-	const KartState &playerKart = game.karts[game.race.playerKartIndex];
+	const KartState &playerKart = game.entities.karts[game.race.playerKartIndex];
 	glm::vec3 kartForward = {std::cos(playerKart.heading), 0.f, std::sin(playerKart.heading)};
 	glm::vec3 desiredTarget = playerKart.position + kartForward * CAMERA_LOOK_AHEAD;
 	glm::vec3 desiredPosition = playerKart.position - kartForward * game.camera.distance

@@ -141,10 +141,12 @@ void buildTrack(TrackState &track)
 	track.roadHalfWidth = 7.f;
 	track.wallHalfWidth = 11.f;
 
-	// Compute total length
+	// Compute segment start distances and total length
+	track.segmentStartDistances.resize(track.centerLine.size());
 	track.totalLength = 0.f;
 	for (size_t i = 0; i < track.centerLine.size(); ++i)
 	{
+		track.segmentStartDistances[i] = track.totalLength;
 		size_t next = (i + 1) % track.centerLine.size();
 		track.totalLength += glm::length(track.centerLine[next] - track.centerLine[i]);
 	}
@@ -202,20 +204,26 @@ void buildTrack(TrackState &track)
 	track.itemBoxes.push_back({{-27.f, 0.8f, 0.f}, 0.f, true});
 }
 
-TrackQuery queryTrackPosition(glm::vec3 position, const TrackState &track)
+TrackQuery queryTrackPosition(glm::vec3 position, const TrackState &track, int *segmentHint)
 {
 	TrackQuery result = {};
 	float bestDistSq = FLT_MAX;
-	float runningDist = 0.f;
+	int bestSegment = 0;
+	int numSegments = static_cast<int>(track.centerLine.size());
+	if (numSegments < 2) { return result; }
 
-	for (size_t i = 0; i < track.centerLine.size(); ++i)
+	int hint = (segmentHint && *segmentHint >= 0 && *segmentHint < numSegments)
+		? *segmentHint : 0;
+	constexpr int localRadius = 3;
+
+	auto checkSegment = [&](int i)
 	{
-		size_t next = (i + 1) % track.centerLine.size();
+		int next = (i + 1) % numSegments;
 		glm::vec3 a = track.centerLine[i];
 		glm::vec3 b = track.centerLine[next];
 		glm::vec3 ab = b - a;
 		float segLen = glm::length(ab);
-		if (segLen <= 0.f) { runningDist += segLen; continue; }
+		if (segLen <= 0.f) { return; }
 
 		float t = glm::clamp(glm::dot(position - a, ab) / (segLen * segLen), 0.f, 1.f);
 		glm::vec3 closest = a + ab * t;
@@ -224,12 +232,29 @@ TrackQuery queryTrackPosition(glm::vec3 position, const TrackState &track)
 		if (distSq < bestDistSq)
 		{
 			bestDistSq = distSq;
-			result.distanceAlongTrack = runningDist + t * segLen;
+			bestSegment = i;
+			result.distanceAlongTrack = track.segmentStartDistances[i] + t * segLen;
 			result.closestPoint = closest;
 		}
+	};
 
-		runningDist += segLen;
+	// Local search around hint
+	for (int offset = -localRadius; offset <= localRadius; ++offset)
+	{
+		int i = ((hint + offset) % numSegments + numSegments) % numSegments;
+		checkSegment(i);
 	}
+
+	// Fallback to full scan if local search found nothing close
+	if (bestDistSq > track.wallHalfWidth * track.wallHalfWidth * 4.f)
+	{
+		for (int i = 0; i < numSegments; ++i)
+		{
+			checkSegment(i);
+		}
+	}
+
+	if (segmentHint) { *segmentHint = bestSegment; }
 
 	glm::vec3 offset = position - result.closestPoint;
 	offset.y = 0.f;

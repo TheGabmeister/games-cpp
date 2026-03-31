@@ -89,6 +89,7 @@ struct KartState
 	float lastSafeHeading = 0.f;
 	float stuckTimer = 0.f;
 	float respawnTimer = 0.f;
+	int lastSegmentHint = 0;
 };
 
 struct Checkpoint
@@ -144,6 +145,7 @@ struct TrackState
 	float totalLength = 0.f;
 	float roadHalfWidth = 0.f;
 	float wallHalfWidth = 0.f;
+	std::vector<float> segmentStartDistances;
 
 	glm::vec2 boundsMin = {};
 	glm::vec2 boundsMax = {};
@@ -181,6 +183,13 @@ struct MenuState
 	float previewRotation = 0.f;
 };
 
+struct EntityState
+{
+	std::vector<KartState> karts;
+	std::vector<Projectile> projectiles;
+	std::vector<Hazard> hazards;
+};
+
 struct GameState
 {
 	MenuState menu = {};
@@ -189,9 +198,7 @@ struct GameState
 	CameraState camera = {};
 	DebugState debug = {};
 
-	std::vector<KartState> karts;
-	std::vector<Projectile> projectiles;
-	std::vector<Hazard> hazards;
+	EntityState entities = {};
 	EventQueue events = {};
 
 	float pulseTimer = 0.f;

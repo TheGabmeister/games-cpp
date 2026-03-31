@@ -56,7 +56,7 @@ int findKartAhead(const GameState &game, int kartIndex)
 
 void useItem(GameState &game, int kartIndex)
 {
-	KartState &kart = game.karts[kartIndex];
+	KartState &kart = game.entities.karts[kartIndex];
 	if (kart.heldItem == ItemType::None) { return; }
 
 	ItemType item = kart.heldItem;
@@ -77,7 +77,7 @@ void useItem(GameState &game, int kartIndex)
 		h.position.y = 0.3f;
 		h.ownerKart = kartIndex;
 		h.alive = true;
-		game.hazards.push_back(h);
+		game.entities.hazards.push_back(h);
 	}
 	else if (item == ItemType::GreenShell)
 	{
@@ -91,7 +91,7 @@ void useItem(GameState &game, int kartIndex)
 		p.lifetime = GREEN_SHELL_LIFETIME;
 		p.bounceCount = 0;
 		p.alive = true;
-		game.projectiles.push_back(p);
+		game.entities.projectiles.push_back(p);
 	}
 	else if (item == ItemType::RedShell)
 	{
@@ -106,7 +106,7 @@ void useItem(GameState &game, int kartIndex)
 		p.targetKart = target;
 		p.lifetime = RED_SHELL_LIFETIME;
 		p.alive = true;
-		game.projectiles.push_back(p);
+		game.entities.projectiles.push_back(p);
 	}
 }
 
@@ -129,9 +129,9 @@ void updateItemSystems(GameState &game, float deltaTime)
 	// Item box pickup
 	if (game.race.phase == RacePhase::Racing)
 	{
-		for (int i = 0; i < static_cast<int>(game.karts.size()); ++i)
+		for (int i = 0; i < static_cast<int>(game.entities.karts.size()); ++i)
 		{
-			KartState &kart = game.karts[i];
+			KartState &kart = game.entities.karts[i];
 			if (kart.heldItem != ItemType::None || kart.spinoutTimer > 0.f) { continue; }
 
 			for (ItemBox &box : game.track.itemBoxes)
@@ -145,7 +145,7 @@ void updateItemSystems(GameState &game, float deltaTime)
 					{
 						if (game.race.ranking[r] == i) { place = r + 1; break; }
 					}
-					kart.heldItem = rollRandomItem(place, static_cast<int>(game.karts.size()));
+					kart.heldItem = rollRandomItem(place, static_cast<int>(game.entities.karts.size()));
 					box.active = false;
 					box.respawnTimer = ITEM_BOX_RESPAWN_TIME;
 					game.events.push({GameEventType::ItemPickedUp, i});
@@ -156,9 +156,9 @@ void updateItemSystems(GameState &game, float deltaTime)
 	}
 
 	// Player item use
-	for (int i = 0; i < static_cast<int>(game.karts.size()); ++i)
+	for (int i = 0; i < static_cast<int>(game.entities.karts.size()); ++i)
 	{
-		KartState &kart = game.karts[i];
+		KartState &kart = game.entities.karts[i];
 		if (kart.controlType == KartControlType::Player)
 		{
 			if (kart.input.useItemPressed && kart.heldItem != ItemType::None
@@ -188,7 +188,7 @@ void updateItemSystems(GameState &game, float deltaTime)
 	}
 
 	// Projectile update
-	for (Projectile &proj : game.projectiles)
+	for (Projectile &proj : game.entities.projectiles)
 	{
 		if (!proj.alive) { continue; }
 
@@ -197,9 +197,9 @@ void updateItemSystems(GameState &game, float deltaTime)
 
 		// Red shell homing
 		if (proj.type == ItemType::RedShell && proj.targetKart >= 0
-			&& proj.targetKart < static_cast<int>(game.karts.size()))
+			&& proj.targetKart < static_cast<int>(game.entities.karts.size()))
 		{
-			const KartState &target = game.karts[proj.targetKart];
+			const KartState &target = game.entities.karts[proj.targetKart];
 			glm::vec3 toTarget = target.position - proj.position;
 			toTarget.y = 0.f;
 			float dist = glm::length(toTarget);
@@ -239,11 +239,11 @@ void updateItemSystems(GameState &game, float deltaTime)
 		}
 
 		// Kart collision
-		for (int k = 0; k < static_cast<int>(game.karts.size()); ++k)
+		for (int k = 0; k < static_cast<int>(game.entities.karts.size()); ++k)
 		{
 			if (k == proj.ownerKart && proj.lifetime > (proj.type == ItemType::GreenShell
 				? GREEN_SHELL_LIFETIME - 0.3f : RED_SHELL_LIFETIME - 0.3f)) { continue; }
-			KartState &target = game.karts[k];
+			KartState &target = game.entities.karts[k];
 			float dist = glm::length(target.position - proj.position);
 			float hitRadius = (proj.type == ItemType::GreenShell ? GREEN_SHELL_RADIUS : RED_SHELL_RADIUS) + KART_HIT_RADIUS;
 			if (dist < hitRadius)
@@ -264,13 +264,13 @@ void updateItemSystems(GameState &game, float deltaTime)
 	}
 
 	// Hazard collision
-	for (Hazard &haz : game.hazards)
+	for (Hazard &haz : game.entities.hazards)
 	{
 		if (!haz.alive) { continue; }
 
-		for (int k = 0; k < static_cast<int>(game.karts.size()); ++k)
+		for (int k = 0; k < static_cast<int>(game.entities.karts.size()); ++k)
 		{
-			KartState &kart = game.karts[k];
+			KartState &kart = game.entities.karts[k];
 			if (kart.spinoutTimer > 0.f) { continue; }
 			float dist = glm::length(kart.position - haz.position);
 			if (dist < KART_HIT_RADIUS + 0.5f)
@@ -291,12 +291,12 @@ void updateItemSystems(GameState &game, float deltaTime)
 	}
 
 	// Cleanup dead projectiles and hazards
-	game.projectiles.erase(
-		std::remove_if(game.projectiles.begin(), game.projectiles.end(),
+	game.entities.projectiles.erase(
+		std::remove_if(game.entities.projectiles.begin(), game.entities.projectiles.end(),
 			[](const Projectile &p) { return !p.alive; }),
-		game.projectiles.end());
-	game.hazards.erase(
-		std::remove_if(game.hazards.begin(), game.hazards.end(),
+		game.entities.projectiles.end());
+	game.entities.hazards.erase(
+		std::remove_if(game.entities.hazards.begin(), game.entities.hazards.end(),
 			[](const Hazard &h) { return !h.alive; }),
-		game.hazards.end());
+		game.entities.hazards.end());
 }

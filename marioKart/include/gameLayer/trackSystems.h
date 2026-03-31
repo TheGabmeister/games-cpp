@@ -19,7 +19,7 @@ bool crossedWrappedDistance(float previousValue, float currentValue, float thres
 glm::vec3 sampleTrackPosition(const TrackState &track, float distanceAlongTrack);
 glm::vec3 sampleTrackForward(const TrackState &track, float distanceAlongTrack);
 
-TrackQuery queryTrackPosition(glm::vec3 position, const TrackState &track);
+TrackQuery queryTrackPosition(glm::vec3 position, const TrackState &track, int *segmentHint = nullptr);
 
 void updateKartTransform(KartState &kart, const TrackState &track);
 float getSegmentProgress(const KartState &kart, const TrackState &track);

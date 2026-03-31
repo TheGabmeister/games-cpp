@@ -43,6 +43,23 @@ constexpr float MINI_TURBO_DURATION = 0.6f;
 constexpr float BOOST_EXTRA_SPEED = 6.f;
 constexpr float BOOST_PAD_DURATION = 0.5f;
 
+// Items
+constexpr float ITEM_BOX_RADIUS = 1.5f;
+constexpr float ITEM_BOX_RESPAWN_TIME = 5.f;
+constexpr float MUSHROOM_BOOST_DURATION = 1.0f;
+constexpr float BANANA_HIT_SPEED_MULT = 0.15f;
+constexpr float BANANA_SPINOUT_TIME = 0.8f;
+constexpr float GREEN_SHELL_SPEED = 25.f;
+constexpr float GREEN_SHELL_LIFETIME = 6.f;
+constexpr float GREEN_SHELL_RADIUS = 0.6f;
+constexpr int GREEN_SHELL_MAX_BOUNCES = 3;
+constexpr float RED_SHELL_SPEED = 22.f;
+constexpr float RED_SHELL_LIFETIME = 8.f;
+constexpr float RED_SHELL_RADIUS = 0.6f;
+constexpr float RED_SHELL_HOMING_RATE = 3.5f;
+constexpr float KART_HIT_RADIUS = 1.2f;
+constexpr float AI_ITEM_USE_DELAY = 2.f;
+
 // AI
 constexpr float AI_CORNER_LOOK_AHEAD = 8.f;
 constexpr float AI_CORNER_SPEED_FACTOR = 0.6f;

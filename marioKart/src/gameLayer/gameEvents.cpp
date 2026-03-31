@@ -23,6 +23,10 @@ const char *getGameEventName(GameEventType type)
 		case GameEventType::DriftBoosted: return "DriftBoosted";
 		case GameEventType::BoostPadHit: return "BoostPadHit";
 		case GameEventType::AIRecovered: return "AIRecovered";
+		case GameEventType::ItemPickedUp: return "ItemPickedUp";
+		case GameEventType::ItemUsed: return "ItemUsed";
+		case GameEventType::KartHitHazard: return "KartHitHazard";
+		case GameEventType::KartHitProjectile: return "KartHitProjectile";
 		default: return "UnknownEvent";
 	}
 }

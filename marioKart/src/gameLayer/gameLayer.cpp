@@ -134,6 +134,32 @@ namespace
 			renderer::drawMarker(center, 3.f, {0.84f, 0.48f, 0.2f});
 		}
 
+		// Item boxes
+		for (const ItemBox &box : track.itemBoxes)
+		{
+			if (!box.active) { continue; }
+			float bob = std::sin(game.pulseTimer * 3.f + box.position.x) * 0.3f;
+			glm::vec3 pos = box.position + glm::vec3{0.f, bob, 0.f};
+			renderer::drawBox(pos, {1.2f, 1.2f, 1.2f}, {0.9f, 0.9f, 0.2f}, game.pulseTimer * 1.5f);
+		}
+
+		// Hazards (bananas)
+		for (const Hazard &haz : game.hazards)
+		{
+			if (!haz.alive) { continue; }
+			renderer::drawBox(haz.position, {0.6f, 0.5f, 0.6f}, {0.95f, 0.85f, 0.15f});
+		}
+
+		// Projectiles
+		for (const Projectile &proj : game.projectiles)
+		{
+			if (!proj.alive) { continue; }
+			glm::vec3 color = (proj.type == ItemType::GreenShell)
+				? glm::vec3(0.2f, 0.85f, 0.3f) : glm::vec3(0.9f, 0.2f, 0.2f);
+			float angle = std::atan2(proj.velocity.x, proj.velocity.z);
+			renderer::drawBox(proj.position, {0.7f, 0.5f, 0.7f}, color, angle);
+		}
+
 		// Karts
 		for (int i = 0; i < static_cast<int>(game.karts.size()); ++i)
 		{
@@ -249,6 +275,23 @@ namespace
 		{
 			drawRectPixels(framebufferHeight, framebufferWidth,
 				{24, framebufferHeight - 50, 80, 8}, {0.5f, 0.35f, 0.15f});
+		}
+
+		// Held item indicator
+		if (playerKart.heldItem != ItemType::None)
+		{
+			glm::vec3 itemColor = {0.5f, 0.5f, 0.5f};
+			int itemWidth = 24;
+			if (playerKart.heldItem == ItemType::Mushroom) { itemColor = {0.95f, 0.4f, 0.3f}; }
+			else if (playerKart.heldItem == ItemType::Banana) { itemColor = {0.95f, 0.85f, 0.15f}; }
+			else if (playerKart.heldItem == ItemType::GreenShell) { itemColor = {0.2f, 0.85f, 0.3f}; }
+			else if (playerKart.heldItem == ItemType::RedShell) { itemColor = {0.9f, 0.2f, 0.2f}; }
+			int itemX = framebufferWidth / 2 - itemWidth / 2;
+			int itemY = framebufferHeight - 50;
+			drawRectPixels(framebufferHeight, framebufferWidth,
+				{itemX - 2, itemY - 2, itemWidth + 4, itemWidth + 4}, {0.12f, 0.12f, 0.14f});
+			drawRectPixels(framebufferHeight, framebufferWidth,
+				{itemX, itemY, itemWidth, itemWidth}, itemColor);
 		}
 	}
 }

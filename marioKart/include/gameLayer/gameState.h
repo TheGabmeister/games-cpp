@@ -77,6 +77,8 @@ struct KartState
 	float wrongWayTimer = 0.f;
 
 	ItemType heldItem = ItemType::None;
+	float spinoutTimer = 0.f;
+	float aiItemTimer = 0.f;
 
 	KartInputState input = {};
 	KartProgress progress = {};
@@ -102,11 +104,39 @@ struct BoostPad
 	float halfLength = 1.5f;
 };
 
+struct ItemBox
+{
+	glm::vec3 position = {};
+	float respawnTimer = 0.f;
+	bool active = true;
+};
+
+struct Projectile
+{
+	glm::vec3 position = {};
+	glm::vec3 velocity = {};
+	float heading = 0.f;
+	ItemType type = ItemType::GreenShell;
+	int ownerKart = -1;
+	int targetKart = -1;
+	float lifetime = 0.f;
+	int bounceCount = 0;
+	bool alive = false;
+};
+
+struct Hazard
+{
+	glm::vec3 position = {};
+	int ownerKart = -1;
+	bool alive = false;
+};
+
 struct TrackState
 {
 	std::vector<glm::vec3> centerLine;
 	std::vector<Checkpoint> checkpoints;
 	std::vector<BoostPad> boostPads;
+	std::vector<ItemBox> itemBoxes;
 
 	float totalLength = 0.f;
 	float roadHalfWidth = 0.f;
@@ -150,6 +180,8 @@ struct GameState
 	DebugState debug = {};
 
 	std::vector<KartState> karts;
+	std::vector<Projectile> projectiles;
+	std::vector<Hazard> hazards;
 	EventQueue events = {};
 
 	float pulseTimer = 0.f;

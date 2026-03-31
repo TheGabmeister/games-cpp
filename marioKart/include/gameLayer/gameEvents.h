@@ -12,7 +12,11 @@ enum class GameEventType
 	RespawnRequested,
 	DriftBoosted,
 	BoostPadHit,
-	AIRecovered
+	AIRecovered,
+	ItemPickedUp,
+	ItemUsed,
+	KartHitHazard,
+	KartHitProjectile
 };
 
 struct GameEvent

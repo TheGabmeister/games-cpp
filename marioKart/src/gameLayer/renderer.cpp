@@ -12,6 +12,7 @@ namespace
 {
 	GLuint shaderProgram = 0;
 	GLint uMatLocation = -1;
+	GLint uModelLocation = -1;
 	GLint uColorLocation = -1;
 
 	GLuint cubeVAO = 0, cubeVBO = 0;
@@ -21,30 +22,32 @@ namespace
 	glm::mat4 viewProjection = glm::mat4(1.f);
 
 	// clang-format off
+	// Interleaved: position (vec3) + normal (vec3) per vertex
 	const float cubeVertices[] = {
-		// Front face (z = 0.5)
-		-0.5f, -0.5f,  0.5f,   0.5f, -0.5f,  0.5f,   0.5f,  0.5f,  0.5f,
-		-0.5f, -0.5f,  0.5f,   0.5f,  0.5f,  0.5f,  -0.5f,  0.5f,  0.5f,
-		// Back face (z = -0.5)
-		 0.5f, -0.5f, -0.5f,  -0.5f, -0.5f, -0.5f,  -0.5f,  0.5f, -0.5f,
-		 0.5f, -0.5f, -0.5f,  -0.5f,  0.5f, -0.5f,   0.5f,  0.5f, -0.5f,
-		// Left face (x = -0.5)
-		-0.5f, -0.5f, -0.5f,  -0.5f, -0.5f,  0.5f,  -0.5f,  0.5f,  0.5f,
-		-0.5f, -0.5f, -0.5f,  -0.5f,  0.5f,  0.5f,  -0.5f,  0.5f, -0.5f,
-		// Right face (x = 0.5)
-		 0.5f, -0.5f,  0.5f,   0.5f, -0.5f, -0.5f,   0.5f,  0.5f, -0.5f,
-		 0.5f, -0.5f,  0.5f,   0.5f,  0.5f, -0.5f,   0.5f,  0.5f,  0.5f,
-		// Top face (y = 0.5)
-		-0.5f,  0.5f,  0.5f,   0.5f,  0.5f,  0.5f,   0.5f,  0.5f, -0.5f,
-		-0.5f,  0.5f,  0.5f,   0.5f,  0.5f, -0.5f,  -0.5f,  0.5f, -0.5f,
-		// Bottom face (y = -0.5)
-		-0.5f, -0.5f, -0.5f,   0.5f, -0.5f, -0.5f,   0.5f, -0.5f,  0.5f,
-		-0.5f, -0.5f, -0.5f,   0.5f, -0.5f,  0.5f,  -0.5f, -0.5f,  0.5f,
+		// Front face (z = 0.5), normal = (0, 0, 1)
+		-0.5f, -0.5f,  0.5f,  0,0,1,   0.5f, -0.5f,  0.5f,  0,0,1,   0.5f,  0.5f,  0.5f,  0,0,1,
+		-0.5f, -0.5f,  0.5f,  0,0,1,   0.5f,  0.5f,  0.5f,  0,0,1,  -0.5f,  0.5f,  0.5f,  0,0,1,
+		// Back face (z = -0.5), normal = (0, 0, -1)
+		 0.5f, -0.5f, -0.5f,  0,0,-1, -0.5f, -0.5f, -0.5f,  0,0,-1, -0.5f,  0.5f, -0.5f,  0,0,-1,
+		 0.5f, -0.5f, -0.5f,  0,0,-1, -0.5f,  0.5f, -0.5f,  0,0,-1,  0.5f,  0.5f, -0.5f,  0,0,-1,
+		// Left face (x = -0.5), normal = (-1, 0, 0)
+		-0.5f, -0.5f, -0.5f, -1,0,0,  -0.5f, -0.5f,  0.5f, -1,0,0,  -0.5f,  0.5f,  0.5f, -1,0,0,
+		-0.5f, -0.5f, -0.5f, -1,0,0,  -0.5f,  0.5f,  0.5f, -1,0,0,  -0.5f,  0.5f, -0.5f, -1,0,0,
+		// Right face (x = 0.5), normal = (1, 0, 0)
+		 0.5f, -0.5f,  0.5f,  1,0,0,   0.5f, -0.5f, -0.5f,  1,0,0,   0.5f,  0.5f, -0.5f,  1,0,0,
+		 0.5f, -0.5f,  0.5f,  1,0,0,   0.5f,  0.5f, -0.5f,  1,0,0,   0.5f,  0.5f,  0.5f,  1,0,0,
+		// Top face (y = 0.5), normal = (0, 1, 0)
+		-0.5f,  0.5f,  0.5f,  0,1,0,   0.5f,  0.5f,  0.5f,  0,1,0,   0.5f,  0.5f, -0.5f,  0,1,0,
+		-0.5f,  0.5f,  0.5f,  0,1,0,   0.5f,  0.5f, -0.5f,  0,1,0,  -0.5f,  0.5f, -0.5f,  0,1,0,
+		// Bottom face (y = -0.5), normal = (0, -1, 0)
+		-0.5f, -0.5f, -0.5f,  0,-1,0,  0.5f, -0.5f, -0.5f,  0,-1,0,  0.5f, -0.5f,  0.5f,  0,-1,0,
+		-0.5f, -0.5f, -0.5f,  0,-1,0,  0.5f, -0.5f,  0.5f,  0,-1,0, -0.5f, -0.5f,  0.5f,  0,-1,0,
 	};
 
+	// Quad: flat on XZ plane, normal = (0, 1, 0)
 	const float quadVertices[] = {
-		-0.5f, 0.f, -0.5f,   0.5f, 0.f, -0.5f,   0.5f, 0.f,  0.5f,
-		-0.5f, 0.f, -0.5f,   0.5f, 0.f,  0.5f,  -0.5f, 0.f,  0.5f,
+		-0.5f, 0.f, -0.5f,  0,1,0,   0.5f, 0.f, -0.5f,  0,1,0,   0.5f, 0.f,  0.5f,  0,1,0,
+		-0.5f, 0.f, -0.5f,  0,1,0,   0.5f, 0.f,  0.5f,  0,1,0,  -0.5f, 0.f,  0.5f,  0,1,0,
 	};
 	// clang-format on
 
@@ -69,7 +72,7 @@ namespace
 		return shader;
 	}
 
-	void createVAO(GLuint &vao, GLuint &vbo, const float *data, size_t dataSize, GLenum usage)
+	void createVAO(GLuint &vao, GLuint &vbo, const float *data, size_t dataSize, GLenum usage, bool hasNormals = true)
 	{
 		glGenVertexArrays(1, &vao);
 		glGenBuffers(1, &vbo);
@@ -78,15 +81,27 @@ namespace
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 		glBufferData(GL_ARRAY_BUFFER, dataSize, data, usage);
 
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
-		glEnableVertexAttribArray(0);
+		if (hasNormals)
+		{
+			GLsizei stride = 6 * sizeof(float);
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void *)0);
+			glEnableVertexAttribArray(0);
+			glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void *)(3 * sizeof(float)));
+			glEnableVertexAttribArray(1);
+		}
+		else
+		{
+			glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void *)0);
+			glEnableVertexAttribArray(0);
+		}
 
 		glBindVertexArray(0);
 	}
 
-	void setUniforms(const glm::mat4 &mat, const glm::vec3 &color)
+	void setUniforms(const glm::mat4 &mvp, const glm::mat4 &model, const glm::vec3 &color)
 	{
-		glUniformMatrix4fv(uMatLocation, 1, GL_FALSE, glm::value_ptr(mat));
+		glUniformMatrix4fv(uMatLocation, 1, GL_FALSE, glm::value_ptr(mvp));
+		glUniformMatrix4fv(uModelLocation, 1, GL_FALSE, glm::value_ptr(model));
 		glUniform3fv(uColorLocation, 1, glm::value_ptr(color));
 	}
 }
@@ -136,11 +151,12 @@ namespace renderer
 		if (!success) { return false; }
 
 		uMatLocation = glGetUniformLocation(shaderProgram, "u_mat");
+		uModelLocation = glGetUniformLocation(shaderProgram, "u_model");
 		uColorLocation = glGetUniformLocation(shaderProgram, "u_color");
 
-		createVAO(cubeVAO, cubeVBO, cubeVertices, sizeof(cubeVertices), GL_STATIC_DRAW);
-		createVAO(quadVAO, quadVBO, quadVertices, sizeof(quadVertices), GL_STATIC_DRAW);
-		createVAO(lineVAO, lineVBO, nullptr, 6 * sizeof(float), GL_DYNAMIC_DRAW);
+		createVAO(cubeVAO, cubeVBO, cubeVertices, sizeof(cubeVertices), GL_STATIC_DRAW, true);
+		createVAO(quadVAO, quadVBO, quadVertices, sizeof(quadVertices), GL_STATIC_DRAW, true);
+		createVAO(lineVAO, lineVBO, nullptr, 6 * sizeof(float), GL_DYNAMIC_DRAW, false);
 
 		platform::log("Renderer initialized");
 		return true;
@@ -178,7 +194,7 @@ namespace renderer
 		}
 		model = glm::scale(model, glm::vec3(size.x, 1.f, size.y));
 
-		setUniforms(viewProjection * model, color);
+		setUniforms(viewProjection * model, model, color);
 		glBindVertexArray(quadVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 	}
@@ -192,7 +208,7 @@ namespace renderer
 		}
 		model = glm::scale(model, size);
 
-		setUniforms(viewProjection * model, color);
+		setUniforms(viewProjection * model, model, color);
 		glBindVertexArray(cubeVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 36);
 	}
@@ -205,7 +221,7 @@ namespace renderer
 		glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
 		glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verts), verts);
 
-		setUniforms(viewProjection, color);
+		setUniforms(viewProjection, glm::mat4(1.f), color);
 		glDrawArrays(GL_LINES, 0, 2);
 	}
 

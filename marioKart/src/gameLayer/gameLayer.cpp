@@ -289,129 +289,201 @@ namespace
 		renderer2d.flush();
 	}
 
-	void drawOverlay(int framebufferWidth, int framebufferHeight)
+	const char *getPlaceSuffix(int place)
+	{
+		if (place == 1) { return "ST"; }
+		if (place == 2) { return "ND"; }
+		if (place == 3) { return "RD"; }
+		return "TH";
+	}
+
+	const char *getItemName(ItemType item)
+	{
+		switch (item)
+		{
+			case ItemType::Mushroom: return "MUSHROOM";
+			case ItemType::Banana: return "BANANA";
+			case ItemType::GreenShell: return "GREEN SHELL";
+			case ItemType::RedShell: return "RED SHELL";
+			default: return "";
+		}
+	}
+
+	glm::vec4 getItemColor4(ItemType item)
+	{
+		switch (item)
+		{
+			case ItemType::Mushroom: return {0.95f, 0.4f, 0.3f, 1.f};
+			case ItemType::Banana: return {0.95f, 0.85f, 0.15f, 1.f};
+			case ItemType::GreenShell: return {0.2f, 0.85f, 0.3f, 1.f};
+			case ItemType::RedShell: return {0.9f, 0.2f, 0.2f, 1.f};
+			default: return {0.5f, 0.5f, 0.5f, 1.f};
+		}
+	}
+
+	void drawHud(int w, int h)
 	{
 		if (!gameData.debug.showOverlay)
 		{
 			return;
 		}
 
-		glm::vec3 phaseColor = {0.18f, 0.38f, 0.72f};
-		if (gameData.race.phase == RacePhase::Countdown)
-		{
-			phaseColor = {0.92f, 0.58f, 0.18f};
-		}
-		else if (gameData.race.phase == RacePhase::Racing)
-		{
-			phaseColor = {0.18f, 0.62f, 0.34f};
-		}
-		else if (gameData.race.phase == RacePhase::Finished)
-		{
-			phaseColor = {0.72f, 0.22f, 0.18f};
-		}
-
-		drawRectPixels(framebufferHeight, framebufferWidth, {24, 18, framebufferWidth - 48, 14}, phaseColor);
-
-		float countdownRatio = 1.f;
-		if (gameData.race.phase == RacePhase::Countdown)
-		{
-			countdownRatio = glm::clamp(gameData.race.countdownTimer / 3.f, 0.f, 1.f);
-		}
-		else if (gameData.race.phase == RacePhase::Finished)
-		{
-			countdownRatio = glm::clamp(1.f - gameData.race.finishedTimer / 3.f, 0.f, 1.f);
-		}
-		drawRectPixels(framebufferHeight, framebufferWidth,
-			{24, 38, static_cast<int>((framebufferWidth - 48) * countdownRatio), 8}, {0.92f, 0.9f, 0.9f});
-
 		const KartState &playerKart = gameData.karts[gameData.race.playerKartIndex];
-		float speedRatio = glm::clamp(playerKart.speed / 18.f, 0.f, 1.f);
-		drawRectPixels(framebufferHeight, framebufferWidth, {24, framebufferHeight - 34, 160, 12}, {0.16f, 0.16f, 0.18f});
-		drawRectPixels(framebufferHeight, framebufferWidth, {24, framebufferHeight - 34, static_cast<int>(160 * speedRatio), 12}, playerKart.color);
 
-		float lapRatio = glm::clamp(
-			(static_cast<float>(playerKart.progress.currentLap) + playerKart.progress.segmentProgress) /
-			static_cast<float>(std::max(1, gameData.race.totalLaps)), 0.f, 1.f);
-		drawRectPixels(framebufferHeight, framebufferWidth, {200, framebufferHeight - 34, 160, 12}, {0.16f, 0.16f, 0.18f});
-		drawRectPixels(framebufferHeight, framebufferWidth, {200, framebufferHeight - 34, static_cast<int>(160 * lapRatio), 12}, {0.95f, 0.84f, 0.22f});
+		renderer2d.updateWindowMetrics(w, h);
+		renderer2d.clearDrawData();
 
-		for (int rank = 0; rank < static_cast<int>(gameData.race.ranking.size()); ++rank)
-		{
-			int kartIndex = gameData.race.ranking[rank];
-			int barWidth = 14;
-			int barHeight = 22 + std::max(0, 24 - rank * 3);
-			int x = framebufferWidth - 30 - rank * 18;
-			int y = 24;
-			drawRectPixels(framebufferHeight, framebufferWidth, {x, y, barWidth, barHeight}, gameData.karts[kartIndex].color);
-		}
+		char buf[64] = {};
 
-		// Player place indicator (stacked dots: fewer = better)
+		// Position (top-left)
 		{
 			int place = gameData.race.playerPlace;
-			int totalKarts = static_cast<int>(gameData.karts.size());
-			glm::vec3 placeColor = (place <= 1) ? glm::vec3(0.95f, 0.84f, 0.22f)
-				: (place <= 3) ? glm::vec3(0.7f, 0.7f, 0.75f)
-				: glm::vec3(0.55f, 0.35f, 0.2f);
-			int dotSize = 8;
-			int spacing = 12;
-			int startX = framebufferWidth / 2 - (place * spacing) / 2;
-			int y = 20;
-			for (int p = 0; p < place; ++p)
-			{
-				drawRectPixels(framebufferHeight, framebufferWidth,
-					{startX + p * spacing, y, dotSize, dotSize}, placeColor);
-			}
+			glm::vec4 placeColor = (place <= 1) ? glm::vec4(0.95f, 0.84f, 0.22f, 1.f)
+				: (place <= 3) ? glm::vec4(0.78f, 0.78f, 0.82f, 1.f)
+				: glm::vec4(0.65f, 0.45f, 0.3f, 1.f);
 
-			// Background bar showing total field size
-			int totalWidth = totalKarts * spacing;
-			int bgX = framebufferWidth / 2 - totalWidth / 2;
-			drawRectPixels(framebufferHeight, framebufferWidth,
-				{bgX, y + dotSize + 2, totalWidth, 3}, {0.2f, 0.2f, 0.22f});
-			int filledWidth = place * spacing;
-			int fillX = framebufferWidth / 2 - totalWidth / 2;
-			drawRectPixels(framebufferHeight, framebufferWidth,
-				{fillX, y + dotSize + 2, filledWidth, 3}, placeColor);
+			std::snprintf(buf, sizeof(buf), "%d%s", place, getPlaceSuffix(place));
+			glui::renderText(renderer2d, buf, menuFont,
+				{16, 10, 80, 42}, placeColor, false, false);
+
+			std::snprintf(buf, sizeof(buf), "/ %d", static_cast<int>(gameData.karts.size()));
+			glui::renderText(renderer2d, buf, menuFont,
+				{100, 22, 50, 22}, {0.6f, 0.6f, 0.6f, 1.f}, false, false);
 		}
 
-		if (gameData.debug.eventFlashTimer > 0.f)
+		// Lap counter (top-right)
 		{
-			float flashRatio = glm::clamp(gameData.debug.eventFlashTimer / 0.35f, 0.f, 1.f);
-			drawRectPixels(framebufferHeight, framebufferWidth,
-				{framebufferWidth - 180, framebufferHeight - 34, static_cast<int>(156 * flashRatio), 12},
-				{0.95f, 0.46f, 0.22f});
+			int lap = std::min(playerKart.progress.currentLap + 1, gameData.race.totalLaps);
+			std::snprintf(buf, sizeof(buf), "LAP %d/%d", lap, gameData.race.totalLaps);
+			glui::renderText(renderer2d, buf, menuFont,
+				{static_cast<float>(w - 160), 10, 144, 32}, {0.95f, 0.84f, 0.22f, 1.f}, false, true);
 		}
 
-		// Wrong-way warning
+		// Speed bar (bottom-left)
+		{
+			float speedRatio = glm::clamp(playerKart.speed / KART_MAX_SPEED, 0.f, 1.f);
+			float barW = 160.f;
+			float barH = 14.f;
+			float barX = 20.f;
+			float barY = h - 60.f;
+			renderer2d.renderRectangle({barX, barY, barW, barH}, {0.16f, 0.16f, 0.18f, 1.f});
+			renderer2d.renderRectangle({barX, barY, barW * speedRatio, barH},
+				{playerKart.color.r, playerKart.color.g, playerKart.color.b, 1.f});
+
+			std::snprintf(buf, sizeof(buf), "%d", static_cast<int>(std::abs(playerKart.speed)));
+			glui::renderText(renderer2d, buf, menuFont,
+				{barX + barW + 8, barY - 2, 40, barH + 4}, {0.85f, 0.85f, 0.85f, 1.f}, false, false);
+		}
+
+		// Boost indicator (bottom-left, above speed bar)
+		if (playerKart.boostTimer > 0.f)
+		{
+			glui::renderText(renderer2d, "BOOST", menuFont,
+				{20, static_cast<float>(h - 80), 70, 18}, {0.95f, 0.55f, 0.1f, 1.f}, false, false);
+		}
+
+		// Drift indicator
+		if (playerKart.driftState == DriftState::Drifting)
+		{
+			float driftAlpha = (playerKart.driftTimer >= MINI_TURBO_MIN_DRIFT_TIME)
+				? 0.5f + 0.5f * std::sin(gameData.pulseTimer * 12.f) : 0.8f;
+			glm::vec4 driftColor = (playerKart.driftTimer >= MINI_TURBO_MIN_DRIFT_TIME)
+				? glm::vec4(0.95f, 0.55f, 0.1f, driftAlpha)
+				: glm::vec4(0.6f, 0.6f, 0.65f, driftAlpha);
+			glui::renderText(renderer2d, "DRIFT", menuFont,
+				{20, static_cast<float>(h - 98), 60, 16}, driftColor, false, false);
+		}
+
+		// Held item (bottom-center)
+		if (playerKart.heldItem != ItemType::None)
+		{
+			float itemBoxSize = 36.f;
+			float itemX = w / 2.f - itemBoxSize / 2.f;
+			float itemY = h - 56.f;
+			glm::vec4 itemColor = getItemColor4(playerKart.heldItem);
+			renderer2d.renderRectangle({itemX - 3, itemY - 3, itemBoxSize + 6, itemBoxSize + 6},
+				{0.12f, 0.12f, 0.14f, 1.f});
+			renderer2d.renderRectangle({itemX, itemY, itemBoxSize, itemBoxSize}, itemColor);
+
+			glui::renderText(renderer2d, getItemName(playerKart.heldItem), menuFont,
+				{w / 2.f - 60, itemY - 20, 120, 16}, itemColor, false, true);
+		}
+
+		// Countdown (center)
+		if (gameData.race.phase == RacePhase::Countdown)
+		{
+			int countNum = static_cast<int>(std::ceil(gameData.race.countdownTimer));
+			if (countNum > 0)
+			{
+				std::snprintf(buf, sizeof(buf), "%d", countNum);
+				float scale = 1.f + 0.3f * (gameData.race.countdownTimer - std::floor(gameData.race.countdownTimer));
+				float size = 80 * scale;
+				glui::renderText(renderer2d, buf, menuFont,
+					{w / 2.f - size / 2, h * 0.3f, size, size},
+					{0.95f, 0.95f, 0.95f, 1.f}, false, true);
+			}
+		}
+		else if (gameData.race.phase == RacePhase::Racing && gameData.race.raceTimer < 1.5f)
+		{
+			float alpha = 1.f - gameData.race.raceTimer / 1.5f;
+			glui::renderText(renderer2d, "GO!", menuFont,
+				{w / 2.f - 50, h * 0.3f, 100, 80},
+				{0.18f, 0.85f, 0.34f, alpha}, false, true);
+		}
+
+		// Race timer (top-center)
+		if (gameData.race.phase == RacePhase::Racing || gameData.race.phase == RacePhase::Finished)
+		{
+			int totalSeconds = static_cast<int>(gameData.race.raceTimer);
+			int minutes = totalSeconds / 60;
+			int seconds = totalSeconds % 60;
+			int hundredths = static_cast<int>((gameData.race.raceTimer - totalSeconds) * 100);
+			std::snprintf(buf, sizeof(buf), "%d:%02d.%02d", minutes, seconds, hundredths);
+			glui::renderText(renderer2d, buf, menuFont,
+				{w / 2.f - 60, 10, 120, 26}, {0.85f, 0.85f, 0.85f, 1.f}, false, true);
+		}
+
+		// Wrong-way warning (center)
 		if (playerKart.wrongWay)
 		{
-			int barW = framebufferWidth - 48;
-			drawRectPixels(framebufferHeight, framebufferWidth,
-				{24, 56, barW, 10}, {0.95f, 0.2f, 0.2f});
+			float flash = 0.5f + 0.5f * std::sin(gameData.pulseTimer * 8.f);
+			glui::renderText(renderer2d, "WRONG WAY!", menuFont,
+				{w / 2.f - 100, h * 0.22f, 200, 40},
+				{0.95f, 0.2f, 0.2f, flash}, false, true);
+		}
+
+		// Respawn indicator
+		if (playerKart.respawnTimer > 0.f)
+		{
+			float alpha = 0.5f + 0.5f * std::sin(gameData.pulseTimer * 10.f);
+			glui::renderText(renderer2d, "RESPAWNING...", menuFont,
+				{w / 2.f - 100, h * 0.55f, 200, 30},
+				{0.85f, 0.85f, 0.9f, alpha}, false, true);
 		}
 
 		// Off-road indicator
-		if (playerKart.offRoad && gameData.race.phase == RacePhase::Racing)
+		if (playerKart.offRoad && gameData.race.phase == RacePhase::Racing && !playerKart.wrongWay)
 		{
-			drawRectPixels(framebufferHeight, framebufferWidth,
-				{24, framebufferHeight - 50, 80, 8}, {0.5f, 0.35f, 0.15f});
+			glui::renderText(renderer2d, "OFF ROAD", menuFont,
+				{20, static_cast<float>(h - 116), 80, 14}, {0.55f, 0.4f, 0.2f, 0.8f}, false, false);
 		}
 
-		// Held item indicator
-		if (playerKart.heldItem != ItemType::None)
+		// Ranking column (top-right, below lap)
 		{
-			glm::vec3 itemColor = {0.5f, 0.5f, 0.5f};
-			int itemWidth = 24;
-			if (playerKart.heldItem == ItemType::Mushroom) { itemColor = {0.95f, 0.4f, 0.3f}; }
-			else if (playerKart.heldItem == ItemType::Banana) { itemColor = {0.95f, 0.85f, 0.15f}; }
-			else if (playerKart.heldItem == ItemType::GreenShell) { itemColor = {0.2f, 0.85f, 0.3f}; }
-			else if (playerKart.heldItem == ItemType::RedShell) { itemColor = {0.9f, 0.2f, 0.2f}; }
-			int itemX = framebufferWidth / 2 - itemWidth / 2;
-			int itemY = framebufferHeight - 50;
-			drawRectPixels(framebufferHeight, framebufferWidth,
-				{itemX - 2, itemY - 2, itemWidth + 4, itemWidth + 4}, {0.12f, 0.12f, 0.14f});
-			drawRectPixels(framebufferHeight, framebufferWidth,
-				{itemX, itemY, itemWidth, itemWidth}, itemColor);
+			float colX = w - 30.f;
+			float colY = 50.f;
+			for (int rank = 0; rank < static_cast<int>(gameData.race.ranking.size()); ++rank)
+			{
+				int kartIndex = gameData.race.ranking[rank];
+				float barHeight = 18.f + std::max(0.f, 16.f - rank * 2.f);
+				glm::vec3 c = gameData.karts[kartIndex].color;
+				renderer2d.renderRectangle(
+					{colX - rank * 18.f, colY, 14.f, barHeight},
+					{c.r, c.g, c.b, 1.f});
+			}
 		}
+
+		renderer2d.flush();
 	}
 }
 
@@ -475,9 +547,7 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		glDisable(GL_DEPTH_TEST);
 		glUseProgram(0);
 
-		glEnable(GL_SCISSOR_TEST);
-		drawOverlay(w, h);
-		glDisable(GL_SCISSOR_TEST);
+		drawHud(w, h);
 
 		if (gameData.race.phase == RacePhase::Finished)
 		{

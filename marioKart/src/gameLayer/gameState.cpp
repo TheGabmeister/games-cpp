@@ -112,7 +112,7 @@ GameState createDefaultGameState()
 	buildTrack(game.track);
 
 	float laneOffsets[KART_PALETTE_COUNT] = {-2.5f, -0.8f, 0.9f, 2.6f, -1.8f, 1.6f, -3.2f, 3.4f};
-	float baseSpeeds[KART_PALETTE_COUNT] = {12.f, 13.2f, 12.8f, 13.5f, 12.5f, 13.0f, 12.3f, 13.8f};
+	float baseSpeeds[KART_PALETTE_COUNT] = {12.f, 12.8f, 12.5f, 13.0f, 12.3f, 12.7f, 12.2f, 13.2f};
 
 	game.karts.resize(KART_PALETTE_COUNT);
 	for (int i = 0; i < KART_PALETTE_COUNT; ++i)
@@ -160,6 +160,7 @@ void resetRace(GameState &game)
 		kart.spinoutTimer = 0.f;
 		kart.aiItemTimer = 0.f;
 		kart.stuckTimer = 0.f;
+		kart.respawnTimer = 0.f;
 		kart.progress = {};
 		kart.distanceAlongTrack = i * 1.6f;
 
@@ -314,12 +315,21 @@ void updateGameScaffold(GameState &game, float deltaTime)
 
 		if (kart.controlType == KartControlType::Player)
 		{
+			// Respawn freeze countdown
+			if (kart.respawnTimer > 0.f)
+			{
+				kart.respawnTimer -= deltaTime;
+				if (kart.respawnTimer < 0.f) { kart.respawnTimer = 0.f; }
+			}
+
+			bool playerFrozen = frozen || kart.respawnTimer > 0.f;
+
 			float boostBonus = (kart.boostTimer > 0.f) ? BOOST_EXTRA_SPEED : 0.f;
 			float accelFactor = kart.offRoad ? OFF_ROAD_ACCEL_FACTOR : 1.f;
 			float maxSpeed = (kart.offRoad ? (KART_MAX_SPEED * OFF_ROAD_SPEED_FACTOR) : KART_MAX_SPEED) + boostBonus;
 			float drag = KART_DRAG + (kart.offRoad ? OFF_ROAD_EXTRA_DRAG : 0.f);
 
-			if (frozen)
+			if (playerFrozen)
 			{
 				if (kart.driftState != DriftState::None) { kart.driftState = DriftState::None; kart.driftTimer = 0.f; }
 				if (kart.speed > 0.f) { kart.speed -= drag * deltaTime; if (kart.speed < 0.f) { kart.speed = 0.f; } }
@@ -469,8 +479,45 @@ void updateGameScaffold(GameState &game, float deltaTime)
 				kart.wrongWay = false;
 			}
 
-			kart.lastSafePosition = kart.position;
-			kart.lastSafeHeading = kart.heading;
+			// Save safe position only when on-road and moving forward
+			if (!kart.offRoad && !kart.wrongWay && kart.speed > 1.f)
+			{
+				kart.lastSafePosition = kart.position;
+				kart.lastSafeHeading = kart.heading;
+				kart.stuckTimer = 0.f;
+			}
+
+			// Out-of-bounds / stuck detection
+			if (game.race.phase == RacePhase::Racing && kart.respawnTimer <= 0.f)
+			{
+				bool outOfBounds = q.lateralDistance > game.track.wallHalfWidth + PLAYER_OOB_MARGIN;
+				if (outOfBounds || std::abs(kart.speed) < PLAYER_STUCK_SPEED_THRESHOLD)
+				{
+					kart.stuckTimer += deltaTime;
+				}
+
+				if (outOfBounds || kart.stuckTimer >= PLAYER_STUCK_TIME)
+				{
+					kart.position = kart.lastSafePosition;
+					kart.heading = kart.lastSafeHeading;
+					kart.position.y = 0.f;
+					kart.speed = 0.f;
+					kart.velocity = {};
+					kart.driftState = DriftState::None;
+					kart.driftTimer = 0.f;
+					kart.boostTimer = 0.f;
+					kart.spinoutTimer = 0.f;
+					kart.wrongWay = false;
+					kart.wrongWayTimer = 0.f;
+					kart.stuckTimer = 0.f;
+					kart.respawnTimer = RESPAWN_FREEZE_TIME;
+
+					TrackQuery rq = queryTrackPosition(kart.position, game.track);
+					kart.distanceAlongTrack = rq.distanceAlongTrack;
+
+					game.events.push({GameEventType::RespawnRequested, i});
+				}
+			}
 		}
 		else
 		{

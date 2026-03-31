@@ -138,8 +138,8 @@ void buildTrack(TrackState &track)
 	track.centerLine.push_back({-26.f, 0.f, -8.f});   // 13
 	track.centerLine.push_back({-20.f, 0.f, -14.f});  // 14
 
-	track.roadHalfWidth = 6.f;
-	track.wallHalfWidth = 10.f;
+	track.roadHalfWidth = 7.f;
+	track.wallHalfWidth = 11.f;
 
 	// Compute total length
 	track.totalLength = 0.f;

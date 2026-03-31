@@ -1,4 +1,5 @@
 #include "gameState.h"
+#include "gameConfig.h"
 
 #include <algorithm>
 #include <cmath>
@@ -210,6 +211,37 @@ namespace
 		return glm::clamp((localDistance - previousDistance) / segmentLength, 0.f, 1.f);
 	}
 
+	float projectOntoTrack(glm::vec3 position, const TrackState &track)
+	{
+		float bestDistSq = FLT_MAX;
+		float bestTrackDist = 0.f;
+		float runningDist = 0.f;
+
+		for (size_t i = 0; i < track.centerLine.size(); ++i)
+		{
+			size_t next = (i + 1) % track.centerLine.size();
+			glm::vec3 a = track.centerLine[i];
+			glm::vec3 b = track.centerLine[next];
+			glm::vec3 ab = b - a;
+			float segLen = glm::length(ab);
+			if (segLen <= 0.f) { runningDist += segLen; continue; }
+
+			float t = glm::clamp(glm::dot(position - a, ab) / (segLen * segLen), 0.f, 1.f);
+			glm::vec3 closest = a + ab * t;
+			float distSq = glm::dot(position - closest, position - closest);
+
+			if (distSq < bestDistSq)
+			{
+				bestDistSq = distSq;
+				bestTrackDist = runningDist + t * segLen;
+			}
+
+			runningDist += segLen;
+		}
+
+		return bestTrackDist;
+	}
+
 	void updateRaceRanking(GameState &game)
 	{
 		game.race.ranking.clear();
@@ -373,6 +405,9 @@ void processGameInput(GameState &game, platform::Input &input)
 		{
 			kart.input.throttle = input.isButtonHeld(platform::Button::Up) ? 1.f : 0.f;
 			kart.input.brake = input.isButtonHeld(platform::Button::Down);
+			kart.input.steer = 0.f;
+			if (input.isButtonHeld(platform::Button::Left)) { kart.input.steer -= 1.f; }
+			if (input.isButtonHeld(platform::Button::Right)) { kart.input.steer += 1.f; }
 		}
 	}
 }
@@ -405,38 +440,87 @@ void updateGameScaffold(GameState &game, float deltaTime)
 	for (int i = 0; i < static_cast<int>(game.karts.size()); ++i)
 	{
 		KartState &kart = game.karts[i];
+		bool frozen = (game.race.phase == RacePhase::Countdown || game.race.phase == RacePhase::Finished);
+		float previousDistance = kart.distanceAlongTrack;
 
 		if (kart.controlType == KartControlType::Player)
 		{
-			float targetSpeed = kart.baseSpeed;
-			if (kart.input.throttle > 0.f)
+			if (frozen)
 			{
-				targetSpeed += 3.5f;
+				// Drag to stop during countdown/finish
+				if (kart.speed > 0.f) { kart.speed -= KART_DRAG * deltaTime; if (kart.speed < 0.f) { kart.speed = 0.f; } }
+				else if (kart.speed < 0.f) { kart.speed += KART_DRAG * deltaTime; if (kart.speed > 0.f) { kart.speed = 0.f; } }
 			}
-			if (kart.input.brake)
+			else if (kart.input.throttle > 0.f)
 			{
-				targetSpeed -= 5.f;
+				kart.speed += KART_ACCELERATION * deltaTime;
+				if (kart.speed > KART_MAX_SPEED) { kart.speed = KART_MAX_SPEED; }
+			}
+			else if (kart.input.brake)
+			{
+				if (kart.speed > 0.f)
+				{
+					kart.speed -= KART_BRAKE_DECEL * deltaTime;
+					if (kart.speed < 0.f) { kart.speed = 0.f; }
+				}
+				else
+				{
+					kart.speed -= KART_REVERSE_ACCEL * deltaTime;
+					if (kart.speed < -KART_REVERSE_MAX_SPEED) { kart.speed = -KART_REVERSE_MAX_SPEED; }
+				}
+			}
+			else
+			{
+				// Coasting drag
+				if (kart.speed > 0.f)
+				{
+					kart.speed -= KART_DRAG * deltaTime;
+					if (kart.speed < 0.f) { kart.speed = 0.f; }
+				}
+				else if (kart.speed < 0.f)
+				{
+					kart.speed += KART_DRAG * deltaTime;
+					if (kart.speed > 0.f) { kart.speed = 0.f; }
+				}
 			}
 
-			kart.desiredSpeed = glm::clamp(targetSpeed, 2.f, 18.f);
+			// Steering (only when moving)
+			if (std::abs(kart.speed) > 0.1f)
+			{
+				float speedFactor = 1.f - KART_STEER_SPEED_REDUCTION *
+					glm::clamp(std::abs(kart.speed) / KART_MAX_SPEED, 0.f, 1.f);
+				kart.heading -= kart.input.steer * KART_STEER_RATE * speedFactor * deltaTime;
+			}
+
+			// Move by velocity
+			glm::vec3 forward = {std::cos(kart.heading), 0.f, std::sin(kart.heading)};
+			kart.velocity = forward * kart.speed;
+			kart.position += kart.velocity * deltaTime;
+			kart.position.y = 0.f;
+
+			// Project onto track for checkpoint/ranking
+			kart.distanceAlongTrack = projectOntoTrack(kart.position, game.track);
+
+			kart.lastSafePosition = kart.position;
+			kart.lastSafeHeading = kart.heading;
 		}
 		else
 		{
+			// AI: on-rails movement
 			float variation = std::sin(game.race.raceTimer * 0.7f + i * 0.8f) * 0.85f;
 			kart.desiredSpeed = kart.baseSpeed + variation;
+
+			if (frozen) { kart.desiredSpeed = 0.f; }
+
+			float blendRate = (kart.desiredSpeed > kart.speed) ? 4.5f : 6.5f;
+			kart.speed = glm::mix(kart.speed, kart.desiredSpeed, glm::clamp(deltaTime * blendRate, 0.f, 1.f));
+
+			kart.distanceAlongTrack += kart.speed * deltaTime;
+
+			updateKartTransform(kart, game.track);
 		}
 
-		if (game.race.phase == RacePhase::Countdown || game.race.phase == RacePhase::Finished)
-		{
-			kart.desiredSpeed = 0.f;
-		}
-
-		float blendRate = (kart.desiredSpeed > kart.speed) ? 4.5f : 6.5f;
-		kart.speed = glm::mix(kart.speed, kart.desiredSpeed, glm::clamp(deltaTime * blendRate, 0.f, 1.f));
-
-		float previousDistance = kart.distanceAlongTrack;
-		kart.distanceAlongTrack += kart.speed * deltaTime;
-
+		// Checkpoint and lap logic (shared)
 		if (game.race.phase == RacePhase::Racing && !kart.progress.finished)
 		{
 			for (int nextCheckpoint = kart.progress.checkpointIndex + 1;
@@ -444,17 +528,40 @@ void updateGameScaffold(GameState &game, float deltaTime)
 				++nextCheckpoint)
 			{
 				const Checkpoint &checkpoint = game.track.checkpoints[nextCheckpoint];
-				if (!crossedWrappedDistance(previousDistance, kart.distanceAlongTrack,
-					checkpoint.distanceAlongTrack, game.track.totalLength))
+				// For free-driving player, use position-based checkpoint crossing
+				if (kart.controlType == KartControlType::Player)
 				{
-					break;
+					glm::vec3 cpCenter = (checkpoint.start + checkpoint.end) * 0.5f;
+					float cpRadius = glm::length(checkpoint.end - checkpoint.start) * 0.5f + 2.f;
+					float dist = glm::length(kart.position - cpCenter);
+					if (dist > cpRadius) { break; }
+				}
+				else
+				{
+					if (!crossedWrappedDistance(previousDistance, kart.distanceAlongTrack,
+						checkpoint.distanceAlongTrack, game.track.totalLength))
+					{
+						break;
+					}
 				}
 
 				kart.progress.checkpointIndex = nextCheckpoint;
 				game.events.push({GameEventType::CheckpointPassed, i, -1, nextCheckpoint});
 			}
 
-			bool crossedStart = crossedWrappedDistance(previousDistance, kart.distanceAlongTrack, 0.f, game.track.totalLength);
+			// Lap completion: player uses position near start line, AI uses distance
+			bool crossedStart = false;
+			if (kart.controlType == KartControlType::Player && !game.track.checkpoints.empty())
+			{
+				glm::vec3 startCenter = (game.track.checkpoints[0].start + game.track.checkpoints[0].end) * 0.5f;
+				float startRadius = glm::length(game.track.checkpoints[0].end - game.track.checkpoints[0].start) * 0.5f + 2.f;
+				crossedStart = glm::length(kart.position - startCenter) < startRadius;
+			}
+			else
+			{
+				crossedStart = crossedWrappedDistance(previousDistance, kart.distanceAlongTrack, 0.f, game.track.totalLength);
+			}
+
 			int finalCheckpointIndex = static_cast<int>(game.track.checkpoints.size()) - 1;
 			if (crossedStart && kart.progress.checkpointIndex == finalCheckpointIndex)
 			{
@@ -475,14 +582,20 @@ void updateGameScaffold(GameState &game, float deltaTime)
 			}
 		}
 
-		updateKartTransform(kart, game.track);
 		kart.progress.segmentProgress = getSegmentProgress(kart, game.track);
 	}
 
-	glm::vec3 playerPosition = game.karts[game.race.playerKartIndex].position;
-	glm::vec3 playerForward = sampleTrackForward(game.track, game.karts[game.race.playerKartIndex].distanceAlongTrack);
-	game.camera.target = playerPosition;
-	game.camera.position = playerPosition - playerForward * game.camera.distance + glm::vec3(0.f, game.camera.height, 0.f);
+	// Chase camera with spring smoothing
+	const KartState &playerKart = game.karts[game.race.playerKartIndex];
+	glm::vec3 kartForward = {std::cos(playerKart.heading), 0.f, std::sin(playerKart.heading)};
+	glm::vec3 desiredTarget = playerKart.position + kartForward * CAMERA_LOOK_AHEAD;
+	glm::vec3 desiredPosition = playerKart.position - kartForward * game.camera.distance
+		+ glm::vec3(0.f, game.camera.height, 0.f);
+
+	float posFactor = glm::clamp(CAMERA_POSITION_SMOOTH * deltaTime, 0.f, 1.f);
+	float tgtFactor = glm::clamp(CAMERA_TARGET_SMOOTH * deltaTime, 0.f, 1.f);
+	game.camera.position = glm::mix(game.camera.position, desiredPosition, posFactor);
+	game.camera.target = glm::mix(game.camera.target, desiredTarget, tgtFactor);
 
 	updateRaceRanking(game);
 	emitAndLogEvents(game);

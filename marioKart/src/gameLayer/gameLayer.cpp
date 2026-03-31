@@ -96,7 +96,8 @@ namespace
 		{
 			const KartState &kart = game.karts[i];
 			glm::vec3 kartCenter = kart.position + glm::vec3{0.f, 0.4f, 0.f};
-			renderer::drawBox(kartCenter, {1.2f, 0.8f, 2.0f}, kart.color);
+			float kartRotation = -kart.heading + glm::radians(90.f);
+			renderer::drawBox(kartCenter, {1.2f, 0.8f, 2.0f}, kart.color, kartRotation);
 		}
 	}
 

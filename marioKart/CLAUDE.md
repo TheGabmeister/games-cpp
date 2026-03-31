@@ -41,10 +41,12 @@ In Visual Studio: open the folder, Ctrl+S on CMakeLists.txt to configure, select
 - Do not modify platform code unless the task requires it.
 
 **Game layer** (`src/gameLayer/`, `include/gameLayer/`):
-- `gameLayer.cpp` — implements the three entry points
+- `gameLayer.cpp` — implements the three entry points, owns the fixed-step simulation loop
 - `gameLayer.h` — declares entry points and exposes platform API to game code
-- `gameState.cpp` / `gameState.h` — game state structs and update logic
+- `gameState.cpp` / `gameState.h` — game state structs, input processing, and simulation step
 - `gameEvents.cpp` / `gameEvents.h` — lightweight synchronous event queue
+- `renderer.cpp` / `renderer.h` — 3D primitive renderer (quads, boxes, lines, markers)
+- `gameConfig.h` — game-tunable constants (window settings, simulation rate, physics values)
 
 ```cpp
 bool initGame();                                          // called once at startup
@@ -65,13 +67,19 @@ void closeGame();                                         // called on shutdown 
 - `std::vector<KartState>` — per-kart state: position, velocity, heading, speed, drift, boost timer, held item, checkpoint progress, control type (`Player`/`AI`)
 - `EventQueue` — frame-local event notifications (cleared each step)
 
-Key update flow: `createDefaultGameState()` at init → `updateGameScaffold()` each frame → systems read/write `GameState` directly, emitting events for discrete transitions.
+Key update flow: `createDefaultGameState()` at init → each frame: `processGameInput()` once (one-shot actions + player controls), then `updateGameScaffold()` N times at fixed 60 Hz steps → systems read/write `GameState` directly, emitting events for discrete transitions.
 
 ## Event System
 
 Lightweight synchronous queue on `GameState::events`. Events are frame-local notifications, not a subscription system. Current types: `RaceStarted`, `RaceFinished`, `CheckpointPassed`, `LapCompleted`, `KartHitWall`, `RespawnRequested`.
 
-Flow: clear at frame start → gameplay systems push events as things happen → HUD/debug reads them → discarded next frame.
+Flow: clear at step start → gameplay systems push events as things happen → HUD/debug reads them → discarded next step.
+
+## Simulation
+
+The game uses a **fixed-step simulation** at 60 Hz (`FIXED_DT` in `gameConfig.h`). Input is collected once per frame, then the simulation runs 1+ steps to catch up. Frame time is clamped to `MAX_FRAME_TIME` (100ms) to prevent spiral-of-death after debugger pauses.
+
+Input handling is split from simulation: `processGameInput()` handles one-shot actions (key presses, toggles) and writes player intent into `KartInputState`. `updateGameScaffold()` is a pure simulation step with no `platform::Input` dependency — safe to call multiple times per frame.
 
 ## Libraries (in `thirdparty/`)
 
@@ -105,7 +113,14 @@ Access via `platform::Input &input` in `gameLogic()`:
 
 ## Rendering
 
-Currently uses raw OpenGL calls with custom vertex/fragment shaders (`resources/vertex.vert`, `resources/fragment.frag`). The vertex shader applies a `u_mat` transform; the fragment shader outputs a flat `u_color`. No 2D renderer library is linked.
+**3D renderer** (`renderer.h`/`renderer.cpp`): minimal primitive renderer using the vertex/fragment shaders in `resources/`. API:
+- `renderer::init()` / `renderer::close()` — shader compilation, VAO/VBO lifecycle
+- `renderer::beginFrame(camera, w, h)` — builds view/projection from `CameraState`, enables depth test
+- `renderer::drawQuad(center, size, color, rotationY)` — flat XZ-plane quad
+- `renderer::drawBox(center, size, color)` — axis-aligned 3D box
+- `renderer::drawLine(start, end, color)` / `renderer::drawMarker(pos, size, color)` — debug primitives
+
+Shaders: `vertex.vert` transforms `vec3` positions by `u_mat` (projection * view * model); `fragment.frag` outputs flat `u_color`. The 2D HUD overlay uses a scissor+glClear trick (no geometry), rendered after disabling depth test.
 
 ## Serialization Warning
 

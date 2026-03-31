@@ -183,9 +183,13 @@ namespace renderer
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 	}
 
-	void drawBox(glm::vec3 center, glm::vec3 size, glm::vec3 color)
+	void drawBox(glm::vec3 center, glm::vec3 size, glm::vec3 color, float rotationY)
 	{
 		glm::mat4 model = glm::translate(glm::mat4(1.f), center);
+		if (rotationY != 0.f)
+		{
+			model = glm::rotate(model, rotationY, glm::vec3(0.f, 1.f, 0.f));
+		}
 		model = glm::scale(model, size);
 
 		setUniforms(viewProjection * model, color);

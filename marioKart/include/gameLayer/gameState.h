@@ -61,6 +61,9 @@ struct KartState
 	float laneOffset = 0.f;
 	float distanceAlongTrack = 0.f;
 	float boostTimer = 0.f;
+	bool offRoad = false;
+	bool wrongWay = false;
+	float wrongWayTimer = 0.f;
 
 	ItemType heldItem = ItemType::None;
 
@@ -86,6 +89,7 @@ struct TrackState
 
 	float totalLength = 0.f;
 	float roadHalfWidth = 0.f;
+	float wallHalfWidth = 0.f;
 
 	glm::vec2 boundsMin = {};
 	glm::vec2 boundsMax = {};

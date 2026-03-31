@@ -21,3 +21,9 @@ constexpr float KART_STEER_SPEED_REDUCTION = 0.5f;
 constexpr float CAMERA_POSITION_SMOOTH = 5.f;
 constexpr float CAMERA_TARGET_SMOOTH = 8.f;
 constexpr float CAMERA_LOOK_AHEAD = 4.f;
+
+constexpr float WALL_BOUNCE_SPEED_RETAIN = 0.3f;
+constexpr float OFF_ROAD_SPEED_FACTOR = 0.5f;
+constexpr float OFF_ROAD_ACCEL_FACTOR = 0.4f;
+constexpr float OFF_ROAD_EXTRA_DRAG = 12.f;
+constexpr float WRONG_WAY_TIME = 0.5f;

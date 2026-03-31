@@ -114,55 +114,81 @@ namespace
 		return fallback / fallbackLength;
 	}
 
-	void buildPlaceholderTrack(TrackState &track)
+	void buildTrack(TrackState &track)
 	{
 		track.centerLine.clear();
 		track.checkpoints.clear();
 
-		track.centerLine.push_back({-28.f, 0.f, -18.f});
-		track.centerLine.push_back({28.f, 0.f, -18.f});
-		track.centerLine.push_back({28.f, 0.f, 18.f});
-		track.centerLine.push_back({-28.f, 0.f, 18.f});
+		// Oval track (stadium shape): clockwise loop when viewed from above
+		// Bottom straight (heading +X)
+		track.centerLine.push_back({-24.f, 0.f, -16.f});  // 0: start/finish
+		track.centerLine.push_back({-10.f, 0.f, -16.f});  // 1
+		track.centerLine.push_back({10.f, 0.f, -16.f});   // 2
+
+		// Right turn
+		track.centerLine.push_back({20.f, 0.f, -14.f});   // 3
+		track.centerLine.push_back({26.f, 0.f, -8.f});    // 4
+		track.centerLine.push_back({28.f, 0.f, 0.f});     // 5: right apex
+		track.centerLine.push_back({26.f, 0.f, 8.f});     // 6
+		track.centerLine.push_back({20.f, 0.f, 14.f});    // 7
+
+		// Top straight (heading -X)
+		track.centerLine.push_back({10.f, 0.f, 16.f});    // 8
+		track.centerLine.push_back({-10.f, 0.f, 16.f});   // 9
+
+		// Left turn
+		track.centerLine.push_back({-20.f, 0.f, 14.f});   // 10
+		track.centerLine.push_back({-26.f, 0.f, 8.f});    // 11
+		track.centerLine.push_back({-28.f, 0.f, 0.f});    // 12: left apex
+		track.centerLine.push_back({-26.f, 0.f, -8.f});   // 13
+		track.centerLine.push_back({-20.f, 0.f, -14.f});  // 14
 
 		track.roadHalfWidth = 6.f;
-		track.boundsMin = {-40.f, -28.f};
-		track.boundsMax = {40.f, 28.f};
-		track.totalLength = 0.f;
+		track.wallHalfWidth = 10.f;
 
+		// Compute total length
+		track.totalLength = 0.f;
 		for (size_t i = 0; i < track.centerLine.size(); ++i)
 		{
-			size_t nextIndex = (i + 1) % track.centerLine.size();
-			float segmentLength = glm::length(track.centerLine[nextIndex] - track.centerLine[i]);
-			track.totalLength += segmentLength;
+			size_t next = (i + 1) % track.centerLine.size();
+			track.totalLength += glm::length(track.centerLine[next] - track.centerLine[i]);
 		}
 
-		Checkpoint startLine = {};
-		startLine.start = {-28.f, 0.f, -24.f};
-		startLine.end = {-28.f, 0.f, -12.f};
-		startLine.forward = {1.f, 0.f, 0.f};
-		startLine.distanceAlongTrack = 0.f;
-		track.checkpoints.push_back(startLine);
+		// Compute bounds from centerline + wall margin
+		track.boundsMin = {FLT_MAX, FLT_MAX};
+		track.boundsMax = {-FLT_MAX, -FLT_MAX};
+		for (const auto &p : track.centerLine)
+		{
+			track.boundsMin = glm::min(track.boundsMin, glm::vec2(p.x, p.z));
+			track.boundsMax = glm::max(track.boundsMax, glm::vec2(p.x, p.z));
+		}
+		track.boundsMin -= glm::vec2(track.wallHalfWidth + 5.f);
+		track.boundsMax += glm::vec2(track.wallHalfWidth + 5.f);
 
-		Checkpoint checkpoint1 = {};
-		checkpoint1.start = {22.f, 0.f, -18.f};
-		checkpoint1.end = {34.f, 0.f, -18.f};
-		checkpoint1.forward = {0.f, 0.f, 1.f};
-		checkpoint1.distanceAlongTrack = 50.f;
-		track.checkpoints.push_back(checkpoint1);
+		// Place checkpoints at specific centerline point indices
+		auto addCheckpoint = [&](int pointIndex, glm::vec3 forward)
+		{
+			Checkpoint cp = {};
+			glm::vec3 pos = track.centerLine[pointIndex];
+			glm::vec3 right = glm::vec3(-forward.z, 0.f, forward.x);
+			cp.start = pos - right * (track.roadHalfWidth + 4.f);
+			cp.end = pos + right * (track.roadHalfWidth + 4.f);
+			cp.forward = forward;
 
-		Checkpoint checkpoint2 = {};
-		checkpoint2.start = {28.f, 0.f, 12.f};
-		checkpoint2.end = {28.f, 0.f, 24.f};
-		checkpoint2.forward = {-1.f, 0.f, 0.f};
-		checkpoint2.distanceAlongTrack = 92.f;
-		track.checkpoints.push_back(checkpoint2);
+			float dist = 0.f;
+			for (int i = 0; i < pointIndex; ++i)
+			{
+				dist += glm::length(track.centerLine[i + 1] - track.centerLine[i]);
+			}
+			cp.distanceAlongTrack = dist;
 
-		Checkpoint checkpoint3 = {};
-		checkpoint3.start = {-22.f, 0.f, 18.f};
-		checkpoint3.end = {-34.f, 0.f, 18.f};
-		checkpoint3.forward = {0.f, 0.f, -1.f};
-		checkpoint3.distanceAlongTrack = 142.f;
-		track.checkpoints.push_back(checkpoint3);
+			track.checkpoints.push_back(cp);
+		};
+
+		addCheckpoint(0, {1.f, 0.f, 0.f});    // Start/finish
+		addCheckpoint(5, {0.f, 0.f, 1.f});     // Right apex
+		addCheckpoint(9, {-1.f, 0.f, 0.f});    // Top-left
+		addCheckpoint(12, {0.f, 0.f, -1.f});   // Left apex
 	}
 
 	void updateKartTransform(KartState &kart, const TrackState &track)
@@ -211,10 +237,18 @@ namespace
 		return glm::clamp((localDistance - previousDistance) / segmentLength, 0.f, 1.f);
 	}
 
-	float projectOntoTrack(glm::vec3 position, const TrackState &track)
+	struct TrackQuery
 	{
+		float distanceAlongTrack = 0.f;
+		float lateralDistance = 0.f;
+		glm::vec3 closestPoint = {};
+		glm::vec3 normal = {};
+	};
+
+	TrackQuery queryTrackPosition(glm::vec3 position, const TrackState &track)
+	{
+		TrackQuery result = {};
 		float bestDistSq = FLT_MAX;
-		float bestTrackDist = 0.f;
 		float runningDist = 0.f;
 
 		for (size_t i = 0; i < track.centerLine.size(); ++i)
@@ -233,13 +267,21 @@ namespace
 			if (distSq < bestDistSq)
 			{
 				bestDistSq = distSq;
-				bestTrackDist = runningDist + t * segLen;
+				result.distanceAlongTrack = runningDist + t * segLen;
+				result.closestPoint = closest;
 			}
 
 			runningDist += segLen;
 		}
 
-		return bestTrackDist;
+		glm::vec3 offset = position - result.closestPoint;
+		offset.y = 0.f;
+		result.lateralDistance = glm::length(offset);
+		result.normal = (result.lateralDistance > 0.001f)
+			? offset / result.lateralDistance
+			: glm::vec3(0.f, 0.f, 1.f);
+
+		return result;
 	}
 
 	void updateRaceRanking(GameState &game)
@@ -323,7 +365,7 @@ namespace
 GameState createDefaultGameState()
 {
 	GameState game = {};
-	buildPlaceholderTrack(game.track);
+	buildTrack(game.track);
 
 	game.karts.resize(4);
 
@@ -375,6 +417,9 @@ void resetRace(GameState &game)
 		kart.speed = 0.f;
 		kart.desiredSpeed = kart.baseSpeed;
 		kart.boostTimer = 0.f;
+		kart.offRoad = false;
+		kart.wrongWay = false;
+		kart.wrongWayTimer = 0.f;
 		kart.heldItem = ItemType::None;
 		kart.progress = {};
 		kart.distanceAlongTrack = i * 1.6f;
@@ -445,16 +490,19 @@ void updateGameScaffold(GameState &game, float deltaTime)
 
 		if (kart.controlType == KartControlType::Player)
 		{
+			float accelFactor = kart.offRoad ? OFF_ROAD_ACCEL_FACTOR : 1.f;
+			float maxSpeed = kart.offRoad ? (KART_MAX_SPEED * OFF_ROAD_SPEED_FACTOR) : KART_MAX_SPEED;
+			float drag = KART_DRAG + (kart.offRoad ? OFF_ROAD_EXTRA_DRAG : 0.f);
+
 			if (frozen)
 			{
-				// Drag to stop during countdown/finish
-				if (kart.speed > 0.f) { kart.speed -= KART_DRAG * deltaTime; if (kart.speed < 0.f) { kart.speed = 0.f; } }
-				else if (kart.speed < 0.f) { kart.speed += KART_DRAG * deltaTime; if (kart.speed > 0.f) { kart.speed = 0.f; } }
+				if (kart.speed > 0.f) { kart.speed -= drag * deltaTime; if (kart.speed < 0.f) { kart.speed = 0.f; } }
+				else if (kart.speed < 0.f) { kart.speed += drag * deltaTime; if (kart.speed > 0.f) { kart.speed = 0.f; } }
 			}
 			else if (kart.input.throttle > 0.f)
 			{
-				kart.speed += KART_ACCELERATION * deltaTime;
-				if (kart.speed > KART_MAX_SPEED) { kart.speed = KART_MAX_SPEED; }
+				kart.speed += KART_ACCELERATION * accelFactor * deltaTime;
+				if (kart.speed > maxSpeed) { kart.speed = maxSpeed; }
 			}
 			else if (kart.input.brake)
 			{
@@ -471,17 +519,23 @@ void updateGameScaffold(GameState &game, float deltaTime)
 			}
 			else
 			{
-				// Coasting drag
 				if (kart.speed > 0.f)
 				{
-					kart.speed -= KART_DRAG * deltaTime;
+					kart.speed -= drag * deltaTime;
 					if (kart.speed < 0.f) { kart.speed = 0.f; }
 				}
 				else if (kart.speed < 0.f)
 				{
-					kart.speed += KART_DRAG * deltaTime;
+					kart.speed += drag * deltaTime;
 					if (kart.speed > 0.f) { kart.speed = 0.f; }
 				}
+			}
+
+			// Off-road speed cap: drag down to reduced max if over it
+			if (kart.offRoad && kart.speed > maxSpeed)
+			{
+				kart.speed -= OFF_ROAD_EXTRA_DRAG * deltaTime;
+				if (kart.speed < maxSpeed) { kart.speed = maxSpeed; }
 			}
 
 			// Steering (only when moving)
@@ -498,8 +552,33 @@ void updateGameScaffold(GameState &game, float deltaTime)
 			kart.position += kart.velocity * deltaTime;
 			kart.position.y = 0.f;
 
-			// Project onto track for checkpoint/ranking
-			kart.distanceAlongTrack = projectOntoTrack(kart.position, game.track);
+			// Track query: wall collision, off-road, and distance
+			TrackQuery q = queryTrackPosition(kart.position, game.track);
+			kart.distanceAlongTrack = q.distanceAlongTrack;
+
+			if (q.lateralDistance > game.track.wallHalfWidth)
+			{
+				kart.position = q.closestPoint + q.normal * game.track.wallHalfWidth;
+				kart.position.y = 0.f;
+				kart.speed *= WALL_BOUNCE_SPEED_RETAIN;
+				game.events.push({GameEventType::KartHitWall, i});
+			}
+
+			kart.offRoad = q.lateralDistance > game.track.roadHalfWidth;
+
+			// Wrong-way detection
+			glm::vec3 trackFwd = sampleTrackForward(game.track, kart.distanceAlongTrack);
+			glm::vec3 kartFwd = {std::cos(kart.heading), 0.f, std::sin(kart.heading)};
+			if (glm::dot(kartFwd, trackFwd) < -0.3f && std::abs(kart.speed) > 1.f)
+			{
+				kart.wrongWayTimer += deltaTime;
+				kart.wrongWay = kart.wrongWayTimer > WRONG_WAY_TIME;
+			}
+			else
+			{
+				kart.wrongWayTimer = 0.f;
+				kart.wrongWay = false;
+			}
 
 			kart.lastSafePosition = kart.position;
 			kart.lastSafeHeading = kart.heading;

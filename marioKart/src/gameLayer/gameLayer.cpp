@@ -79,16 +79,51 @@ namespace
 				{0.25f, 0.27f, 0.32f}, angle);
 		}
 
-		// Checkpoints
-		for (int i = 0; i < static_cast<int>(track.checkpoints.size()); ++i)
+		// Wall guardrails
+		for (size_t i = 0; i < track.centerLine.size(); ++i)
+		{
+			size_t next = (i + 1) % track.centerLine.size();
+			glm::vec3 start = track.centerLine[i];
+			glm::vec3 end = track.centerLine[next];
+			glm::vec3 delta = end - start;
+			float segLen = glm::length(delta);
+			if (segLen <= 0.f) { continue; }
+
+			glm::vec3 dir = delta / segLen;
+			glm::vec3 right = {-dir.z, 0.f, dir.x};
+			glm::vec3 center = (start + end) * 0.5f;
+			float angle = std::atan2(delta.x, delta.z);
+
+			glm::vec3 wallColorInner = {0.6f, 0.6f, 0.65f};
+			glm::vec3 wallColorOuter = {0.45f, 0.15f, 0.15f};
+
+			// Inner wall (road edge markers)
+			for (int side = -1; side <= 1; side += 2)
+			{
+				glm::vec3 wallCenter = center + right * (track.wallHalfWidth * static_cast<float>(side));
+				wallCenter.y = 0.4f;
+				renderer::drawBox(wallCenter, {0.4f, 0.8f, segLen + 0.2f}, wallColorOuter, angle);
+			}
+		}
+
+		// Finish line
+		if (!track.checkpoints.empty())
+		{
+			const Checkpoint &startCp = track.checkpoints[0];
+			glm::vec3 center = (startCp.start + startCp.end) * 0.5f;
+			center.y = 0.02f;
+			float span = glm::length(startCp.end - startCp.start);
+			float angle = std::atan2(startCp.forward.x, startCp.forward.z);
+			renderer::drawQuad(center, {1.5f, span}, {0.95f, 0.95f, 0.95f}, angle);
+		}
+
+		// Checkpoint markers
+		for (int i = 1; i < static_cast<int>(track.checkpoints.size()); ++i)
 		{
 			const Checkpoint &cp = track.checkpoints[i];
 			glm::vec3 center = (cp.start + cp.end) * 0.5f;
 			center.y = 0.5f;
-			glm::vec3 color = (i == 0)
-				? glm::vec3{0.92f, 0.84f, 0.22f}
-				: glm::vec3{0.84f, 0.48f, 0.2f};
-			renderer::drawMarker(center, 3.f, color);
+			renderer::drawMarker(center, 3.f, {0.84f, 0.48f, 0.2f});
 		}
 
 		// Karts
@@ -163,6 +198,21 @@ namespace
 			drawRectPixels(framebufferHeight, framebufferWidth,
 				{framebufferWidth - 180, framebufferHeight - 34, static_cast<int>(156 * flashRatio), 12},
 				{0.95f, 0.46f, 0.22f});
+		}
+
+		// Wrong-way warning
+		if (playerKart.wrongWay)
+		{
+			int barW = framebufferWidth - 48;
+			drawRectPixels(framebufferHeight, framebufferWidth,
+				{24, 56, barW, 10}, {0.95f, 0.2f, 0.2f});
+		}
+
+		// Off-road indicator
+		if (playerKart.offRoad && gameData.race.phase == RacePhase::Racing)
+		{
+			drawRectPixels(framebufferHeight, framebufferWidth,
+				{24, framebufferHeight - 50, 80, 8}, {0.5f, 0.35f, 0.15f});
 		}
 	}
 }

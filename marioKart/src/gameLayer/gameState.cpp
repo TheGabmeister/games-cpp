@@ -422,11 +422,11 @@ void updateGameScaffold(GameState &game, float deltaTime)
 				{
 					float driftSteer = static_cast<float>(kart.driftDirection) * DRIFT_STEER_BIAS
 						+ kart.input.steer * DRIFT_STEER_RATE;
-					kart.heading -= driftSteer * speedFactor * deltaTime;
+					kart.heading += driftSteer * speedFactor * deltaTime;
 				}
 				else
 				{
-					kart.heading -= kart.input.steer * KART_STEER_RATE * speedFactor * deltaTime;
+					kart.heading += kart.input.steer * KART_STEER_RATE * speedFactor * deltaTime;
 				}
 			}
 

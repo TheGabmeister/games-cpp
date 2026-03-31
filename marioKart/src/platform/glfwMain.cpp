@@ -9,6 +9,7 @@
 #include "platformInput.h"
 #include "otherPlatformFunctions.h"
 #include "gameLayer.h"
+#include "gameConfig.h"
 #include <fstream>
 #include <chrono>
 #include "errorReporting.h"
@@ -399,7 +400,7 @@ int main()
 	(void)freopen("conin$", "r", stdin);
 	(void)freopen("conout$", "w", stdout);
 	(void)freopen("conout$", "w", stderr);
-	std::cout.sync_with_stdio();
+	std::ios::sync_with_stdio(true);
 #endif
 #endif
 #endif
@@ -418,11 +419,11 @@ int main()
 #endif
 
 
-	int w = 500;
-	int h = 500;
-	wind = glfwCreateWindow(w, h, "geam", nullptr, nullptr);
+	int w = WINDOW_DEFAULT_WIDTH;
+	int h = WINDOW_DEFAULT_HEIGHT;
+	wind = glfwCreateWindow(w, h, WINDOW_TITLE, nullptr, nullptr);
 	glfwMakeContextCurrent(wind);
-	glfwSwapInterval(1);
+	glfwSwapInterval(VSYNC_ON);
 
 	glfwSetKeyCallback(wind, keyCallback);
 	glfwSetMouseButtonCallback(wind, mouseCallback);

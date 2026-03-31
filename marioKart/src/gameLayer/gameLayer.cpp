@@ -1,5 +1,6 @@
 #include "gameLayer.h"
 #include "gameState.h"
+#include "renderer.h"
 #include <glad/glad.h>
 #include <algorithm>
 #include <cmath>
@@ -46,94 +47,54 @@ namespace
 		glClear(GL_COLOR_BUFFER_BIT);
 	}
 
-	ScreenRect worldToScreenRect(glm::vec2 worldCenter, glm::vec2 worldSize, const TrackState &track,
-		int panelX, int panelY, int panelWidth, int panelHeight)
+	void drawWorld3D(const GameState &game)
 	{
+		const TrackState &track = game.track;
+
+		// Ground plane (off-road color)
 		glm::vec2 boundsSize = track.boundsMax - track.boundsMin;
-		if (boundsSize.x <= 0.f || boundsSize.y <= 0.f)
+		glm::vec2 boundsCenter = (track.boundsMin + track.boundsMax) * 0.5f;
+		renderer::drawQuad({boundsCenter.x, -0.01f, boundsCenter.y},
+			{boundsSize.x + 20.f, boundsSize.y + 20.f}, {0.22f, 0.3f, 0.2f});
+
+		// Road segments
+		float roadWidth = track.roadHalfWidth * 2.f;
+		for (size_t i = 0; i < track.centerLine.size(); ++i)
 		{
-			return {};
+			size_t next = (i + 1) % track.centerLine.size();
+			glm::vec3 start = track.centerLine[i];
+			glm::vec3 end = track.centerLine[next];
+			glm::vec3 delta = end - start;
+			float segmentLength = glm::length(delta);
+			if (segmentLength <= 0.f) { continue; }
+
+			glm::vec3 center = (start + end) * 0.5f;
+			center.y = 0.f;
+			float angle = std::atan2(delta.x, delta.z);
+
+			renderer::drawQuad(center,
+				{roadWidth, segmentLength + roadWidth},
+				{0.25f, 0.27f, 0.32f}, angle);
 		}
 
-		auto mapPoint = [&](glm::vec2 point)
-		{
-			glm::vec2 normalized = (point - track.boundsMin) / boundsSize;
-			return glm::vec2(
-				panelX + normalized.x * panelWidth,
-				panelY + (1.f - normalized.y) * panelHeight
-			);
-		};
-
-		glm::vec2 minPoint = mapPoint(worldCenter - worldSize * 0.5f);
-		glm::vec2 maxPoint = mapPoint(worldCenter + worldSize * 0.5f);
-
-		ScreenRect rect = {};
-		rect.x = static_cast<int>(std::round(std::min(minPoint.x, maxPoint.x)));
-		rect.y = static_cast<int>(std::round(std::min(minPoint.y, maxPoint.y)));
-		rect.width = static_cast<int>(std::round(std::abs(maxPoint.x - minPoint.x)));
-		rect.height = static_cast<int>(std::round(std::abs(maxPoint.y - minPoint.y)));
-		return rect;
-	}
-
-	void drawWorldPlaceholder(int framebufferWidth, int framebufferHeight)
-	{
-		int panelMargin = 36;
-		int panelWidth = framebufferWidth - panelMargin * 2;
-		int panelHeight = framebufferHeight - panelMargin * 2;
-		int panelSize = std::max(180, std::min(panelWidth, panelHeight));
-		int panelX = (framebufferWidth - panelSize) / 2;
-		int panelY = (framebufferHeight - panelSize) / 2;
-
-		drawRectPixels(framebufferHeight, framebufferWidth, {panelX, panelY, panelSize, panelSize}, {0.14f, 0.19f, 0.16f});
-
-		const TrackState &track = gameData.track;
-		float left = track.centerLine[0].x;
-		float right = track.centerLine[1].x;
-		float bottom = track.centerLine[0].z;
-		float top = track.centerLine[2].z;
-		float width = track.roadHalfWidth * 2.f;
-
-		drawRectPixels(framebufferHeight, framebufferWidth,
-			worldToScreenRect({0.f, bottom}, {right - left + width, width}, track, panelX, panelY, panelSize, panelSize),
-			{0.22f, 0.23f, 0.27f});
-		drawRectPixels(framebufferHeight, framebufferWidth,
-			worldToScreenRect({0.f, top}, {right - left + width, width}, track, panelX, panelY, panelSize, panelSize),
-			{0.22f, 0.23f, 0.27f});
-		drawRectPixels(framebufferHeight, framebufferWidth,
-			worldToScreenRect({left, 0.f}, {width, top - bottom + width}, track, panelX, panelY, panelSize, panelSize),
-			{0.22f, 0.23f, 0.27f});
-		drawRectPixels(framebufferHeight, framebufferWidth,
-			worldToScreenRect({right, 0.f}, {width, top - bottom + width}, track, panelX, panelY, panelSize, panelSize),
-			{0.22f, 0.23f, 0.27f});
-
+		// Checkpoints
 		for (int i = 0; i < static_cast<int>(track.checkpoints.size()); ++i)
 		{
-			const Checkpoint &checkpoint = track.checkpoints[i];
-			glm::vec2 center = {(checkpoint.start.x + checkpoint.end.x) * 0.5f, (checkpoint.start.z + checkpoint.end.z) * 0.5f};
-			glm::vec2 size = {std::abs(checkpoint.end.x - checkpoint.start.x), std::abs(checkpoint.end.z - checkpoint.start.z)};
-			size = glm::max(size, glm::vec2{2.f, 2.f});
-
-			glm::vec3 color = (i == 0) ? glm::vec3{0.92f, 0.84f, 0.22f} : glm::vec3{0.84f, 0.48f, 0.2f};
-			drawRectPixels(framebufferHeight, framebufferWidth,
-				worldToScreenRect(center, size, track, panelX, panelY, panelSize, panelSize), color);
+			const Checkpoint &cp = track.checkpoints[i];
+			glm::vec3 center = (cp.start + cp.end) * 0.5f;
+			center.y = 0.5f;
+			glm::vec3 color = (i == 0)
+				? glm::vec3{0.92f, 0.84f, 0.22f}
+				: glm::vec3{0.84f, 0.48f, 0.2f};
+			renderer::drawMarker(center, 3.f, color);
 		}
 
-		for (int i = 0; i < static_cast<int>(gameData.karts.size()); ++i)
+		// Karts
+		for (int i = 0; i < static_cast<int>(game.karts.size()); ++i)
 		{
-			const KartState &kart = gameData.karts[i];
-			glm::vec2 center = {kart.position.x, kart.position.z};
-			glm::vec2 size = (i == gameData.race.playerKartIndex) ? glm::vec2{4.f, 4.f} : glm::vec2{3.2f, 3.2f};
-
-			if (i == gameData.race.playerKartIndex)
-			{
-				drawRectPixels(framebufferHeight, framebufferWidth,
-					worldToScreenRect(center, size + glm::vec2{1.6f, 1.6f}, track, panelX, panelY, panelSize, panelSize),
-					{0.98f, 0.98f, 0.98f});
-			}
-
-			drawRectPixels(framebufferHeight, framebufferWidth,
-				worldToScreenRect(center, size, track, panelX, panelY, panelSize, panelSize),
-				kart.color);
+			const KartState &kart = game.karts[i];
+			glm::vec3 kartCenter = kart.position + glm::vec3{0.f, 0.4f, 0.f};
+			renderer::drawBox(kartCenter, {1.2f, 0.8f, 2.0f}, kart.color);
 		}
 	}
 
@@ -205,8 +166,14 @@ namespace
 
 bool initGame()
 {
+	if (!renderer::init())
+	{
+		platform::log("Failed to initialize renderer", LogManager::logError);
+		return false;
+	}
+
 	gameData = createDefaultGameState();
-	platform::log("Init Phase 0.1 gameplay scaffold");
+	platform::log("Init Phase 0.2 primitive renderer");
 
 	return true;
 }
@@ -227,10 +194,15 @@ bool gameLogic(float deltaTime, platform::Input &input)
 
 	glViewport(0, 0, w, h);
 	glClearColor(0.07f, 0.1f, 0.14f, 1.0f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	renderer::beginFrame(gameData.camera, w, h);
+	drawWorld3D(gameData);
+
+	glDisable(GL_DEPTH_TEST);
+	glUseProgram(0);
 
 	glEnable(GL_SCISSOR_TEST);
-	drawWorldPlaceholder(w, h);
 	drawOverlay(w, h);
 	glDisable(GL_SCISSOR_TEST);
 
@@ -240,5 +212,6 @@ bool gameLogic(float deltaTime, platform::Input &input)
 //This function might not be be called if the program is forced closed
 void closeGame()
 {
-	platform::log("Close Phase 0.1 gameplay scaffold");
+	renderer::close();
+	platform::log("Close Phase 0.2 primitive renderer");
 }

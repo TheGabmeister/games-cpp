@@ -76,6 +76,12 @@ This project should be Mario Kart 64-inspired, not a direct asset or content cop
   - track width roughly 8 to 14 units for the first course
 - Tune feel first; realism is not required.
 
+### Constants and Configuration
+
+- Store game-tunable constants (window settings, physics values, timing parameters, track dimensions) in `include/gameLayer/gameConfig.h`.
+- Use `constexpr` for compile-time constants.
+- Avoid scattering magic numbers across source files.
+
 ### Rendering Rules
 
 - Use flat colors only.

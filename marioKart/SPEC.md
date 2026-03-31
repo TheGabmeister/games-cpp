@@ -40,15 +40,6 @@ This should feel like a strong mechanics-first prototype, not like a content-com
 - Core mode: single-player race against AI
 - Scope target: one solid vertical slice before adding extra content
 
-## Legal and Content Boundary
-
-This project should be Mario Kart 64-inspired, not a direct asset or content copy.
-
-- Do not use Nintendo textures, models, music, voice clips, UI art, or ripped course data.
-- Do not depend on exact character rosters or copyrighted presentation.
-- It is acceptable to target similar mechanics, race pacing, item roles, and camera feel.
-- Use original placeholder names for tracks, racers, and item identifiers in code where possible.
-
 ## Technical Direction
 
 ### World Model

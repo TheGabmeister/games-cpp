@@ -26,6 +26,8 @@ Current important game-layer support files:
 - `include/gameLayer/gameEvents.h` / `src/gameLayer/gameEvents.cpp`: lightweight event queue and event type definitions.
 - `include/gameLayer/gameConfig.h`: centralized gameplay constants/configuration values.
 - `include/gameLayer/renderer.h` / `src/gameLayer/renderer.cpp`: game-layer rendering helpers.
+- `include/gameLayer/trackSystems.h` / `src/gameLayer/trackSystems.cpp`: track construction, waypoint sampling, checkpoint math, and track query helpers.
+- `include/gameLayer/itemSystems.h` / `src/gameLayer/itemSystems.cpp`: item box, item state, and item-update helpers.
 
 The main gameplay API is:
 
@@ -95,7 +97,9 @@ Useful platform functions exposed through `gameLayer.h` include:
 - The repo already has a Phase 0.x gameplay scaffold rather than the original sample rectangle demo.
 - The outer frame loop is still owned by `src/platform/glfwMain.cpp`.
 - The per-frame gameplay update currently enters through `gameLogic()` and then into game-layer systems/state helpers.
-- A fixed-step gameplay loop is planned in `SPEC.md` but is not automatically present unless implemented as part of the current task. Do not assume the project already has it.
+- Track logic is no longer purely embedded in `gameState.cpp`; use the dedicated track/item system files when extending track queries, boost pads, item boxes, or checkpoint sampling.
+- The current track representation is waypoint-based and exposed through `trackSystems.*`. Prefer extending that system instead of duplicating track math in unrelated files.
+- A fixed-step gameplay loop at 60 Hz is implemented in `gameLayer.cpp` (`FIXED_DT` / `MAX_FRAME_TIME` in `gameConfig.h`).
 
 ## Validation
 

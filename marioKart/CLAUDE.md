@@ -41,12 +41,14 @@ In Visual Studio: open the folder, Ctrl+S on CMakeLists.txt to configure, select
 - Do not modify platform code unless the task requires it.
 
 **Game layer** (`src/gameLayer/`, `include/gameLayer/`):
-- `gameLayer.cpp` — implements the three entry points, owns the fixed-step simulation loop
+- `gameLayer.cpp` — implements the three entry points, owns the fixed-step simulation loop, renders the 3D world and 2D HUD overlay
 - `gameLayer.h` — declares entry points and exposes platform API to game code
-- `gameState.cpp` / `gameState.h` — game state structs, input processing, and simulation step
+- `gameState.cpp` / `gameState.h` — game state structs, input processing, player physics, AI logic, checkpoint/lap tracking, ranking, camera
+- `trackSystems.cpp` / `trackSystems.h` — track construction (`buildTrack`), centerline sampling (`sampleTrackPosition`, `sampleTrackForward`), track queries (`queryTrackPosition`), kart transform helpers, distance wrapping utilities
+- `itemSystems.cpp` / `itemSystems.h` — item box pickup/respawn, item rolling (weighted by race position), item use (mushroom/banana/green shell/red shell), projectile update with wall bouncing and homing, hazard collision, cleanup
 - `gameEvents.cpp` / `gameEvents.h` — lightweight synchronous event queue
 - `renderer.cpp` / `renderer.h` — 3D primitive renderer (quads, boxes, lines, markers)
-- `gameConfig.h` — game-tunable constants (window settings, simulation rate, physics values)
+- `gameConfig.h` — game-tunable constants (window settings, simulation rate, physics, drift, boost, items, AI)
 
 ```cpp
 bool initGame();                                          // called once at startup
@@ -61,17 +63,19 @@ void closeGame();                                         // called on shutdown 
 `GameState` is the top-level container, composed of:
 
 - `RaceState` — phase (`Boot`/`Countdown`/`Racing`/`Finished`), lap count, countdown/race timers, ranking
-- `TrackState` — centerline waypoints, checkpoints, road/wall width, bounds
+- `TrackState` — centerline waypoints, checkpoints, road/wall width, bounds, boost pads, item boxes
 - `CameraState` — chase-camera position, target, distance, height
 - `DebugState` — overlay toggle, event flash timer
-- `std::vector<KartState>` — per-kart state: position, velocity, heading, speed, drift, boost timer, held item, checkpoint progress, control type (`Player`/`AI`), off-road/wrong-way flags
+- `std::vector<KartState>` — per-kart state: position, velocity, heading, speed, drift state, boost timer, held item, spinout timer, checkpoint progress, control type (`Player`/`AI`), off-road/wrong-way flags
+- `std::vector<Projectile>` — active shells (green/red) with lifetime, wall bouncing, homing
+- `std::vector<Hazard>` — dropped bananas on the track
 - `EventQueue` — frame-local event notifications (cleared each step)
 
-Key update flow: `createDefaultGameState()` at init → each frame: `processGameInput()` once (one-shot actions + player controls), then `updateGameScaffold()` N times at fixed 60 Hz steps → systems read/write `GameState` directly, emitting events for discrete transitions.
+Key update flow: `createDefaultGameState()` at init → each frame: `processGameInput()` once (one-shot actions + player controls), then `updateGameScaffold()` N times at fixed 60 Hz steps → `updateItemSystems()` handles item/projectile/hazard logic → systems read/write `GameState` directly, emitting events for discrete transitions.
 
 ## Event System
 
-Lightweight synchronous queue on `GameState::events`. Events are frame-local notifications, not a subscription system. Current types: `RaceStarted`, `RaceFinished`, `CheckpointPassed`, `LapCompleted`, `KartHitWall`, `RespawnRequested`.
+Lightweight synchronous queue on `GameState::events`. Events are frame-local notifications, not a subscription system. Current types: `RaceStarted`, `RaceFinished`, `CheckpointPassed`, `LapCompleted`, `KartHitWall`, `RespawnRequested`, `DriftBoosted`, `BoostPadHit`, `AIRecovered`, `ItemPickedUp`, `ItemUsed`, `KartHitHazard`, `KartHitProjectile`.
 
 Flow: clear at step start → gameplay systems push events as things happen → HUD/debug reads them → discarded next step.
 
@@ -81,9 +85,13 @@ The game uses a **fixed-step simulation** at 60 Hz (`FIXED_DT` in `gameConfig.h`
 
 Input handling is split from simulation: `processGameInput()` handles one-shot actions (key presses, toggles) and writes player intent into `KartInputState`. `updateGameScaffold()` is a pure simulation step with no `platform::Input` dependency — safe to call multiple times per frame.
 
-**Player kart** uses free 2D driving physics (acceleration, braking, steering, drag) with `gameConfig.h` constants. **AI karts** follow the track centerline on rails. The player's position is projected onto the track via `queryTrackPosition()` for checkpoint and ranking calculations.
+**Player kart** uses free 2D driving physics (acceleration, braking, steering, drag, drift with hop/mini-turbo) with `gameConfig.h` constants. **AI karts** follow the track centerline with oscillating lane offsets, corner speed reduction, and rubber-banding relative to the player. The player's position is projected onto the track via `queryTrackPosition()` for checkpoint and ranking calculations.
 
-**Track systems**: wall collision pushes the kart back to `wallHalfWidth` from the centerline and reduces speed. Off-road detection triggers when lateral distance exceeds `roadHalfWidth`, reducing max speed and acceleration. Wrong-way detection compares kart heading to track forward direction over a sustained period.
+**Drift system**: LeftShift + steering initiates a hop → drift. Drift locks turn direction with bias, adds lateral slip. Releasing after 0.8s+ grants a mini-turbo speed boost. Wall hits cancel drift.
+
+**Item system**: 8 item boxes on track, position-weighted random items (mushroom/banana/green shell/red shell). Space key to use. AI uses items after a 2s delay. Green shells bounce off walls (3x), red shells home toward the kart ahead. All hits cause a spinout (rotation + speed loss).
+
+**Track systems** (in `trackSystems.cpp`): wall collision pushes the kart back to `wallHalfWidth` from the centerline and reduces speed. Off-road detection triggers when lateral distance exceeds `roadHalfWidth`, reducing max speed and acceleration. Wrong-way detection compares kart heading to track forward direction over a sustained period.
 
 ## Libraries (in `thirdparty/`)
 
@@ -105,6 +113,8 @@ Access via `platform::Input &input` in `gameLogic()`:
 - `input.deltaTime` for frame time
 - `input.typedInput` for text input characters (20-char buffer, auto-repeat at 480ms initial / 70ms repeat)
 - `input.controller` for gamepad (analog sticks, triggers, digital buttons)
+
+Current game controls: Up/Down = accelerate/brake, Left/Right = steer, LeftShift = drift, Space = use item, Tab = toggle HUD, Enter = reset race.
 
 ## Platform Utilities (`platform::` namespace, declared in `gameLayer.h`)
 

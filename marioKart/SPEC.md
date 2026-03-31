@@ -782,9 +782,33 @@ Test:
 - homing is readable and limited
 - projectile affects target racers without feeling magical
 
-### Phase 6: Race Polish
+### Phase 6: Main Menu and Player Selection
 
-#### Task 6.1: Improve HUD and race readability
+#### Task 6.1: Add a main menu screen
+
+- display a title and a start option
+- allow the player to begin a race from the menu
+- keep the visual style consistent with the primitive aesthetic
+
+Test:
+
+- the game boots into the main menu, not directly into a race
+- the player can start a race from the menu
+
+#### Task 6.2: Add a player selection screen
+
+- allow the player to choose a kart color or character slot before racing
+- show a preview of the selected kart
+- confirm selection to proceed to the race countdown
+
+Test:
+
+- the player can pick between at least two kart options
+- the selected kart appears in the race
+
+### Phase 7: Race Polish
+
+#### Task 7.1: Improve HUD and race readability
 
 - show lap, place, countdown, finish state, and held item
 - keep the visual language primitive and uncluttered
@@ -793,7 +817,7 @@ Test:
 
 - a new player can understand race state without guessing
 
-#### Task 6.2: Add out-of-bounds recovery
+#### Task 7.2: Add out-of-bounds recovery
 
 - detect invalid course exit or fall state
 - respawn at the last safe checkpoint pose
@@ -803,7 +827,7 @@ Test:
 - player cannot soft-lock by leaving the course
 - recovery is fast and consistent
 
-#### Task 6.3: Tune the full 3-lap race loop
+#### Task 7.3: Tune the full 3-lap race loop
 
 - tune kart handling
 - tune AI speed and item frequency
@@ -843,7 +867,8 @@ If we want the shortest path to a fun prototype, the order should be:
 14. mushroom-equivalent boost item
 15. banana-equivalent hazard
 16. shell-equivalent projectile
-17. HUD and race polish
+17. main menu and player selection
+18. HUD and race polish
 
 ## Milestone Definitions
 

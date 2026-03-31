@@ -355,12 +355,8 @@ void resetRace(GameState &game)
 	platform::log("Phase 0.1 scaffold reset");
 }
 
-void updateGameScaffold(GameState &game, float deltaTime, platform::Input &input)
+void processGameInput(GameState &game, platform::Input &input)
 {
-	game.events.clear();
-	game.pulseTimer += deltaTime;
-	game.debug.eventFlashTimer = glm::max(0.f, game.debug.eventFlashTimer - deltaTime);
-
 	if (input.isButtonPressed(platform::Button::Tab))
 	{
 		game.debug.showOverlay = !game.debug.showOverlay;
@@ -370,6 +366,22 @@ void updateGameScaffold(GameState &game, float deltaTime, platform::Input &input
 	{
 		resetRace(game);
 	}
+
+	for (KartState &kart : game.karts)
+	{
+		if (kart.controlType == KartControlType::Player)
+		{
+			kart.input.throttle = input.isButtonHeld(platform::Button::Up) ? 1.f : 0.f;
+			kart.input.brake = input.isButtonHeld(platform::Button::Down);
+		}
+	}
+}
+
+void updateGameScaffold(GameState &game, float deltaTime)
+{
+	game.events.clear();
+	game.pulseTimer += deltaTime;
+	game.debug.eventFlashTimer = glm::max(0.f, game.debug.eventFlashTimer - deltaTime);
 
 	if (game.race.phase == RacePhase::Countdown)
 	{
@@ -396,9 +408,6 @@ void updateGameScaffold(GameState &game, float deltaTime, platform::Input &input
 
 		if (kart.controlType == KartControlType::Player)
 		{
-			kart.input.throttle = input.isButtonHeld(platform::Button::Up) ? 1.f : 0.f;
-			kart.input.brake = input.isButtonHeld(platform::Button::Down);
-
 			float targetSpeed = kart.baseSpeed;
 			if (kart.input.throttle > 0.f)
 			{

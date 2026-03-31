@@ -1,5 +1,6 @@
 #include "gameLayer.h"
 #include "gameState.h"
+#include "gameConfig.h"
 #include "renderer.h"
 #include <glad/glad.h>
 #include <algorithm>
@@ -10,6 +11,7 @@
 namespace
 {
 	GameState gameData = {};
+	float simulationAccumulator = 0.f;
 
 	struct ScreenRect
 	{
@@ -190,7 +192,15 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	int w = platform::getFrameBufferSizeX();
 	int h = platform::getFrameBufferSizeY();
 
-	updateGameScaffold(gameData, deltaTime, input);
+	processGameInput(gameData, input);
+
+	float frameDt = glm::min(deltaTime, MAX_FRAME_TIME);
+	simulationAccumulator += frameDt;
+	while (simulationAccumulator >= FIXED_DT)
+	{
+		updateGameScaffold(gameData, FIXED_DT);
+		simulationAccumulator -= FIXED_DT;
+	}
 
 	glViewport(0, 0, w, h);
 	glClearColor(0.07f, 0.1f, 0.14f, 1.0f);

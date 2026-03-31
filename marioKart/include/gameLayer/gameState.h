@@ -132,6 +132,7 @@ struct GameState
 
 GameState createDefaultGameState();
 void resetRace(GameState &game);
-void updateGameScaffold(GameState &game, float deltaTime, platform::Input &input);
+void processGameInput(GameState &game, platform::Input &input);
+void updateGameScaffold(GameState &game, float deltaTime);
 
 const char *getRacePhaseName(RacePhase phase);

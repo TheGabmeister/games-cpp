@@ -41,14 +41,14 @@ In Visual Studio: open the folder, Ctrl+S on CMakeLists.txt to configure, select
 - Do not modify platform code unless the task requires it.
 
 **Game layer** (`src/gameLayer/`, `include/gameLayer/`):
-- `gameLayer.cpp` — implements the three entry points, owns the fixed-step simulation loop, renders the 3D world and 2D HUD overlay
+- `gameLayer.cpp` — implements the three entry points, owns the fixed-step simulation loop, renders the 3D world, 2D HUD overlay, and menu screens (using gl2d/glui)
 - `gameLayer.h` — declares entry points and exposes platform API to game code
-- `gameState.cpp` / `gameState.h` — game state structs, input processing, player physics, AI logic, checkpoint/lap tracking, ranking, camera
+- `gameState.cpp` / `gameState.h` — game state structs, input processing, player physics, AI logic, checkpoint/lap tracking, ranking, camera, menu phase transitions
 - `trackSystems.cpp` / `trackSystems.h` — track construction (`buildTrack`), centerline sampling (`sampleTrackPosition`, `sampleTrackForward`), track queries (`queryTrackPosition`), kart transform helpers, distance wrapping utilities
 - `itemSystems.cpp` / `itemSystems.h` — item box pickup/respawn, item rolling (weighted by race position), item use (mushroom/banana/green shell/red shell), projectile update with wall bouncing and homing, hazard collision, cleanup
 - `gameEvents.cpp` / `gameEvents.h` — lightweight synchronous event queue
-- `renderer.cpp` / `renderer.h` — 3D primitive renderer (quads, boxes, lines, markers)
-- `gameConfig.h` — game-tunable constants (window settings, simulation rate, physics, drift, boost, items, AI)
+- `renderer.cpp` / `renderer.h` — 3D primitive renderer (quads, boxes, lines, markers) with directional lighting
+- `gameConfig.h` — game-tunable constants (window settings, simulation rate, physics, drift, boost, items, AI, menu)
 
 ```cpp
 bool initGame();                                          // called once at startup
@@ -62,7 +62,8 @@ void closeGame();                                         // called on shutdown 
 
 `GameState` is the top-level container, composed of:
 
-- `RaceState` — phase (`Boot`/`Countdown`/`Racing`/`Finished`), lap count, countdown/race timers, ranking
+- `MenuState` — kart selection slot index, preview rotation angle
+- `RaceState` — phase (`MainMenu`/`KartSelect`/`Boot`/`Countdown`/`Racing`/`Finished`), lap count, countdown/race timers, ranking
 - `TrackState` — centerline waypoints, checkpoints, road/wall width, bounds, boost pads, item boxes
 - `CameraState` — chase-camera position, target, distance, height
 - `DebugState` — overlay toggle, event flash timer
@@ -71,7 +72,21 @@ void closeGame();                                         // called on shutdown 
 - `std::vector<Hazard>` — dropped bananas on the track
 - `EventQueue` — frame-local event notifications (cleared each step)
 
-Key update flow: `createDefaultGameState()` at init → each frame: `processGameInput()` once (one-shot actions + player controls), then `updateGameScaffold()` N times at fixed 60 Hz steps → `updateItemSystems()` handles item/projectile/hazard logic → systems read/write `GameState` directly, emitting events for discrete transitions.
+Key update flow: `createDefaultGameState()` at init (starts in `MainMenu` phase) → each frame: `processGameInput()` once (menu navigation or one-shot actions + player controls, phase-dependent), then `updateGameScaffold()` N times at fixed 60 Hz steps (early return for menu phases) → `updateItemSystems()` handles item/projectile/hazard logic → systems read/write `GameState` directly, emitting events for discrete transitions.
+
+## Game Flow
+
+```
+MainMenu ──[Enter]──> KartSelect ──[Enter]──> Countdown ──> Racing ──> Finished
+   ^                     |                                                |
+   └──────[Escape]───────┘                        [Enter]────────────────┘
+```
+
+- **MainMenu**: Title text, kart color palette banner, pulsing "PRESS ENTER" prompt. Rendered with gl2d/glui.
+- **KartSelect**: 8 color swatches with selection highlight, 3D spinning kart preview, left/right to pick, enter to confirm, escape to go back. On confirm, player color is applied and swapped with any AI that had the same color.
+- **Countdown → Racing → Finished**: Standard race loop. After finish, "RACE FINISHED! PRESS ENTER" overlay returns to MainMenu.
+
+Kart colors are shared via `getKartPaletteColor(int index)` — 8 colors used by both kart init and selection screen.
 
 ## Event System
 
@@ -83,7 +98,7 @@ Flow: clear at step start → gameplay systems push events as things happen → 
 
 The game uses a **fixed-step simulation** at 60 Hz (`FIXED_DT` in `gameConfig.h`). Input is collected once per frame, then the simulation runs 1+ steps to catch up. Frame time is clamped to `MAX_FRAME_TIME` (100ms) to prevent spiral-of-death after debugger pauses.
 
-Input handling is split from simulation: `processGameInput()` handles one-shot actions (key presses, toggles) and writes player intent into `KartInputState`. `updateGameScaffold()` is a pure simulation step with no `platform::Input` dependency — safe to call multiple times per frame.
+Input handling is split from simulation: `processGameInput()` handles one-shot actions (key presses, toggles, menu navigation) and writes player intent into `KartInputState`. It early-returns for menu phases. `updateGameScaffold()` is a pure simulation step with no `platform::Input` dependency — safe to call multiple times per frame. It early-returns for `MainMenu` (no-op) and `KartSelect` (only spins the preview kart).
 
 **Player kart** uses free 2D driving physics (acceleration, braking, steering, drag, drift with hop/mini-turbo) with `gameConfig.h` constants. **AI karts** follow the track centerline with oscillating lane offsets, corner speed reduction, and rubber-banding relative to the player. The player's position is projected onto the track via `queryTrackPosition()` for checkpoint and ranking calculations.
 
@@ -102,6 +117,8 @@ Input handling is split from simulation: `processGameInput()` handles one-shot a
 | glm 1.0.3 | Math (vectors, matrices) |
 | stb_image | Image loading |
 | stb_truetype | TTF font loading |
+| gl2d | 2D renderer (sprites, text, shapes) built on OpenGL 3.3; uses stb_truetype for font rasterization |
+| glui | UI widget library built on gl2d (buttons, text labels, sliders, menus) |
 | raudio | Audio playback (miniaudio-based, built with `RAUDIO_STANDALONE`); currently unused |
 
 ## Input System
@@ -114,7 +131,7 @@ Access via `platform::Input &input` in `gameLogic()`:
 - `input.typedInput` for text input characters (20-char buffer, auto-repeat at 480ms initial / 70ms repeat)
 - `input.controller` for gamepad (analog sticks, triggers, digital buttons)
 
-Current game controls: Up/Down = accelerate/brake, Left/Right = steer, LeftShift = drift, Space = use item, Tab = toggle HUD, Enter = reset race.
+Current game controls: Up/Down = accelerate/brake, Left/Right = steer (also kart select navigation), LeftShift = drift, Space = use item, Tab = toggle HUD, Enter = confirm/reset, Escape = back (in menus).
 
 ## Platform Utilities (`platform::` namespace, declared in `gameLayer.h`)
 
@@ -127,14 +144,22 @@ Current game controls: Up/Down = accelerate/brake, Left/Right = steer, LeftShift
 
 ## Rendering
 
-**3D renderer** (`renderer.h`/`renderer.cpp`): minimal primitive renderer using the vertex/fragment shaders in `resources/`. API:
+The game uses two rendering systems:
+
+**3D renderer** (`renderer.h`/`renderer.cpp`): minimal primitive renderer with directional lighting. API:
 - `renderer::init()` / `renderer::close()` — shader compilation, VAO/VBO lifecycle
 - `renderer::beginFrame(camera, w, h)` — builds view/projection from `CameraState`, enables depth test
-- `renderer::drawQuad(center, size, color, rotationY)` — flat XZ-plane quad
-- `renderer::drawBox(center, size, color, rotationY)` — 3D box with optional Y rotation
-- `renderer::drawLine(start, end, color)` / `renderer::drawMarker(pos, size, color)` — debug primitives
+- `renderer::drawQuad(center, size, color, rotationY)` — flat XZ-plane quad (normal up)
+- `renderer::drawBox(center, size, color, rotationY)` — 3D box with per-face normals and optional Y rotation
+- `renderer::drawLine(start, end, color)` / `renderer::drawMarker(pos, size, color)` — debug primitives (no normals)
 
-Shaders: `vertex.vert` transforms `vec3` positions by `u_mat` (projection * view * model); `fragment.frag` outputs flat `u_color`. The 2D HUD overlay uses a scissor+glClear trick (no geometry), rendered after disabling depth test.
+Shaders: `vertex.vert` takes position (location 0) and normal (location 1), transforms by `u_mat` (MVP) and passes world-space normal via `mat3(u_model)`. `fragment.frag` computes ambient (0.45) + diffuse (0.55) lighting from a fixed directional light at `(0.4, 0.8, 0.3)`. Vertex data is interleaved: 6 floats per vertex (position + normal) for cubes and quads; lines use position-only with no normals.
+
+**2D renderer** (gl2d + glui): used for menu screens and text overlays. Initialized in `initGame()` as `gl2d::Renderer2D` + `gl2d::Font` (loads `roboto_black.ttf`). Text is rendered via `glui::renderText()`. The 2D renderer has its own shader pipeline; after using it, the 3D renderer's shader must be re-bound via `renderer::beginFrame()` or `glUseProgram()`.
+
+**HUD overlay**: the in-race HUD still uses a scissor+glClear pixel-rect technique (`drawRectPixels`) for speed/lap bars, ranking, items, and warnings. The "RACE FINISHED" overlay uses gl2d text on top of the 3D scene.
+
+**Rendering order in `gameLogic()`**: clear screen → if menu phase, draw menu with gl2d/glui → else draw 3D world, then scissor-based HUD, then optional gl2d text overlays.
 
 ## Serialization Warning
 

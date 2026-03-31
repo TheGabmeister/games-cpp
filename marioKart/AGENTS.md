@@ -11,6 +11,7 @@ This repository is a small C++17/CMake OpenGL game template centered around GLFW
 - `src/platform/`: windowing, input, startup, file I/O helpers, logging, and other platform code.
 - `include/platform/`: platform-layer headers.
 - `resources/`: runtime assets loaded through `RESOURCES_PATH`.
+  - `resources/vertex.vert` / `resources/fragment.frag`: current shader sources used by the game-layer renderer.
 - `thirdparty/`: vendored dependencies. Do not modify these unless the task explicitly requires it.
 - `SPEC.md`: the current feature/specification roadmap for the Mario Kart-inspired game. Use this as the source of truth for scope and milestone order when implementing gameplay systems.
 
@@ -25,7 +26,7 @@ Current important game-layer support files:
 - `include/gameLayer/gameState.h` / `src/gameLayer/gameState.cpp`: persistent gameplay state, race scaffold logic, and early race-flow updates.
 - `include/gameLayer/gameEvents.h` / `src/gameLayer/gameEvents.cpp`: lightweight event queue and event type definitions.
 - `include/gameLayer/gameConfig.h`: centralized gameplay constants/configuration values.
-- `include/gameLayer/renderer.h` / `src/gameLayer/renderer.cpp`: game-layer rendering helpers.
+- `include/gameLayer/renderer.h` / `src/gameLayer/renderer.cpp`: game-layer rendering helpers, shader setup, and primitive drawing (`drawQuad`, `drawBox`, `drawLine`, `drawMarker`).
 - `include/gameLayer/trackSystems.h` / `src/gameLayer/trackSystems.cpp`: track construction, waypoint sampling, checkpoint math, and track query helpers.
 - `include/gameLayer/itemSystems.h` / `src/gameLayer/itemSystems.cpp`: item box, item state, and item-update helpers.
 
@@ -97,6 +98,7 @@ Useful platform functions exposed through `gameLayer.h` include:
 - The repo already has a Phase 0.x gameplay scaffold rather than the original sample rectangle demo.
 - The outer frame loop is still owned by `src/platform/glfwMain.cpp`.
 - The per-frame gameplay update currently enters through `gameLogic()` and then into game-layer systems/state helpers.
+- Rendering is no longer ad hoc in `gameLayer.cpp`; prefer extending `renderer.*` for new primitive drawing behavior or shader-related changes instead of scattering raw OpenGL setup across gameplay files.
 - Track logic is no longer purely embedded in `gameState.cpp`; use the dedicated track/item system files when extending track queries, boost pads, item boxes, or checkpoint sampling.
 - The current track representation is waypoint-based and exposed through `trackSystems.*`. Prefer extending that system instead of duplicating track math in unrelated files.
 - A fixed-step gameplay loop at 60 Hz is implemented in `gameLayer.cpp` (`FIXED_DT` / `MAX_FRAME_TIME` in `gameConfig.h`).

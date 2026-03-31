@@ -60,6 +60,11 @@ constexpr float RED_SHELL_HOMING_RATE = 3.5f;
 constexpr float KART_HIT_RADIUS = 1.2f;
 constexpr float AI_ITEM_USE_DELAY = 2.f;
 
+// Menu
+constexpr int KART_PALETTE_COUNT = 8;
+constexpr float MENU_KART_SPIN_SPEED = 1.5f;
+constexpr float MENU_PULSE_SPEED = 3.f;
+
 // AI
 constexpr float AI_CORNER_LOOK_AHEAD = 8.f;
 constexpr float AI_CORNER_SPEED_FACTOR = 0.6f;

@@ -43,6 +43,8 @@ add_subdirectory(thirdparty/stb_image)			#loading immaged
 add_subdirectory(thirdparty/stb_truetype)		#loading ttf files
 add_subdirectory(thirdparty/raudio)				#audio
 add_subdirectory(thirdparty/glm)				#math
+add_subdirectory(thirdparty/gl2d)				#2d renderer
+add_subdirectory(thirdparty/glui)				#ui widgets
 
 target_compile_definitions(raudio PRIVATE RAUDIO_STANDALONE SUPPORT_MODULE_RAUDIO)
 
@@ -99,5 +101,5 @@ target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURC
 target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/gameLayer/")
 target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/platform/")
 
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw 
-	glad stb_image stb_truetype raudio)
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw
+	glad stb_image stb_truetype raudio gl2d glui)

@@ -6,12 +6,18 @@
 #include <algorithm>
 #include <cmath>
 #include <glm/glm.hpp>
+#include <gl2d/gl2d.h>
+#include <glui/glui.h>
 #include <logs.h>
 
 namespace
 {
 	GameState gameData = {};
 	float simulationAccumulator = 0.f;
+
+	gl2d::Renderer2D renderer2d;
+	gl2d::Font menuFont;
+	glui::RendererUi menuUi;
 
 	struct ScreenRect
 	{
@@ -170,6 +176,119 @@ namespace
 		}
 	}
 
+	void drawMainMenu(int w, int h, const GameState &game)
+	{
+		renderer2d.updateWindowMetrics(w, h);
+		renderer2d.clearDrawData();
+
+		float centerX = w / 2.f;
+
+		// Title
+		glui::renderText(renderer2d, "KART RACER",
+			menuFont, {centerX - 180, h * 0.15f, 360, 80},
+			{1.f, 1.f, 1.f, 1.f}, false, true);
+
+		// Color banner: row of kart palette swatches
+		float swatchSize = 20.f;
+		float gap = 8.f;
+		float totalWidth = KART_PALETTE_COUNT * swatchSize + (KART_PALETTE_COUNT - 1) * gap;
+		float startX = centerX - totalWidth / 2.f;
+		for (int i = 0; i < KART_PALETTE_COUNT; ++i)
+		{
+			glm::vec3 c = getKartPaletteColor(i);
+			float x = startX + i * (swatchSize + gap);
+			renderer2d.renderRectangle({x, h * 0.35f, swatchSize, swatchSize},
+				{c.r, c.g, c.b, 1.f});
+		}
+
+		// Pulsing "PRESS ENTER" prompt
+		float pulse = 0.6f + 0.4f * std::sin(game.pulseTimer * MENU_PULSE_SPEED);
+		glui::renderText(renderer2d, "PRESS ENTER",
+			menuFont, {centerX - 140, h * 0.55f, 280, 50},
+			{pulse, pulse, pulse, 1.f}, false, true);
+
+		renderer2d.flush();
+	}
+
+	void drawKartSelect(int w, int h, const GameState &game)
+	{
+		renderer2d.updateWindowMetrics(w, h);
+		renderer2d.clearDrawData();
+
+		float centerX = w / 2.f;
+
+		// Title
+		glui::renderText(renderer2d, "SELECT KART",
+			menuFont, {centerX - 160, h * 0.08f, 320, 60},
+			{1.f, 1.f, 1.f, 1.f}, false, true);
+
+		// Color palette strip
+		float swatchSize = 36.f;
+		float gap = 10.f;
+		float totalWidth = KART_PALETTE_COUNT * swatchSize + (KART_PALETTE_COUNT - 1) * gap;
+		float startX = centerX - totalWidth / 2.f;
+		float paletteY = h * 0.25f;
+
+		for (int i = 0; i < KART_PALETTE_COUNT; ++i)
+		{
+			glm::vec3 c = getKartPaletteColor(i);
+			float x = startX + i * (swatchSize + gap);
+
+			if (i == game.menu.selectedKartSlot)
+			{
+				renderer2d.renderRectangle(
+					{x - 4, paletteY - 4, swatchSize + 8, swatchSize + 8},
+					{1.f, 1.f, 1.f, 1.f});
+			}
+
+			renderer2d.renderRectangle({x, paletteY, swatchSize, swatchSize},
+				{c.r, c.g, c.b, 1.f});
+		}
+
+		// Arrow indicators
+		glui::renderText(renderer2d, "<",
+			menuFont, {startX - 40, paletteY - 4, 30, swatchSize + 8},
+			{0.8f, 0.8f, 0.8f, 1.f}, false, true);
+		glui::renderText(renderer2d, ">",
+			menuFont, {startX + totalWidth + 10, paletteY - 4, 30, swatchSize + 8},
+			{0.8f, 0.8f, 0.8f, 1.f}, false, true);
+
+		renderer2d.flush();
+
+		// 3D kart preview
+		{
+			CameraState previewCam = {};
+			previewCam.position = {3.f, 3.f, 3.f};
+			previewCam.target = {0.f, 0.3f, 0.f};
+			previewCam.distance = 5.f;
+			previewCam.height = 3.f;
+
+			renderer::beginFrame(previewCam, w, h);
+			glm::vec3 kartColor = getKartPaletteColor(game.menu.selectedKartSlot);
+			renderer::drawBox({0.f, 0.4f, 0.f}, {1.2f, 0.8f, 2.0f},
+				kartColor, game.menu.previewRotation);
+			// Ground under kart
+			renderer::drawQuad({0.f, -0.01f, 0.f}, {5.f, 5.f}, {0.15f, 0.15f, 0.18f});
+		}
+
+		// Back to 2D for confirm prompt
+		glDisable(GL_DEPTH_TEST);
+		glUseProgram(0);
+
+		renderer2d.clearDrawData();
+
+		float pulse = 0.5f + 0.5f * std::sin(game.pulseTimer * MENU_PULSE_SPEED);
+		glui::renderText(renderer2d, "ENTER TO CONFIRM",
+			menuFont, {centerX - 160, h * 0.82f, 320, 40},
+			{0.95f * pulse, 0.84f * pulse, 0.22f * pulse, 1.f}, false, true);
+
+		glui::renderText(renderer2d, "ESC TO GO BACK",
+			menuFont, {centerX - 130, h * 0.9f, 260, 30},
+			{0.5f, 0.5f, 0.5f, 1.f}, false, true);
+
+		renderer2d.flush();
+	}
+
 	void drawOverlay(int framebufferWidth, int framebufferHeight)
 	{
 		if (!gameData.debug.showOverlay)
@@ -304,6 +423,10 @@ bool initGame()
 		return false;
 	}
 
+	gl2d::init();
+	renderer2d.create();
+	menuFont.createFromFile(RESOURCES_PATH "roboto_black.ttf");
+
 	gameData = createDefaultGameState();
 	platform::log("Init Phase 0.2 primitive renderer");
 
@@ -336,15 +459,41 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	glClearColor(0.07f, 0.1f, 0.14f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	renderer::beginFrame(gameData.camera, w, h);
-	drawWorld3D(gameData);
+	if (gameData.race.phase == RacePhase::MainMenu)
+	{
+		drawMainMenu(w, h, gameData);
+	}
+	else if (gameData.race.phase == RacePhase::KartSelect)
+	{
+		drawKartSelect(w, h, gameData);
+	}
+	else
+	{
+		renderer::beginFrame(gameData.camera, w, h);
+		drawWorld3D(gameData);
 
-	glDisable(GL_DEPTH_TEST);
-	glUseProgram(0);
+		glDisable(GL_DEPTH_TEST);
+		glUseProgram(0);
 
-	glEnable(GL_SCISSOR_TEST);
-	drawOverlay(w, h);
-	glDisable(GL_SCISSOR_TEST);
+		glEnable(GL_SCISSOR_TEST);
+		drawOverlay(w, h);
+		glDisable(GL_SCISSOR_TEST);
+
+		if (gameData.race.phase == RacePhase::Finished)
+		{
+			renderer2d.updateWindowMetrics(w, h);
+			renderer2d.clearDrawData();
+			float pulse = 0.5f + 0.5f * std::sin(gameData.pulseTimer * MENU_PULSE_SPEED);
+			float cx = w / 2.f;
+			glui::renderText(renderer2d, "RACE FINISHED!",
+				menuFont, {cx - 160, h * 0.35f, 320, 60},
+				{0.95f, 0.84f, 0.22f, 1.f}, false, true);
+			glui::renderText(renderer2d, "PRESS ENTER",
+				menuFont, {cx - 130, h * 0.48f, 260, 40},
+				{pulse, pulse, pulse, 1.f}, false, true);
+			renderer2d.flush();
+		}
+	}
 
 	return true;
 }
@@ -352,6 +501,9 @@ bool gameLogic(float deltaTime, platform::Input &input)
 //This function might not be be called if the program is forced closed
 void closeGame()
 {
+	menuFont.cleanup();
+	renderer2d.cleanup();
+	gl2d::cleanup();
 	renderer::close();
 	platform::log("Close Phase 0.2 primitive renderer");
 }

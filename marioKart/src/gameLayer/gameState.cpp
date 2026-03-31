@@ -90,62 +90,42 @@ namespace
 	}
 }
 
+glm::vec3 getKartPaletteColor(int index)
+{
+	static const glm::vec3 palette[KART_PALETTE_COUNT] =
+	{
+		{0.18f, 0.55f, 0.95f},
+		{0.95f, 0.3f, 0.2f},
+		{0.95f, 0.8f, 0.2f},
+		{0.2f, 0.85f, 0.45f},
+		{0.75f, 0.25f, 0.85f},
+		{0.95f, 0.55f, 0.7f},
+		{0.4f, 0.75f, 0.85f},
+		{0.85f, 0.6f, 0.3f},
+	};
+	return palette[index % KART_PALETTE_COUNT];
+}
+
 GameState createDefaultGameState()
 {
 	GameState game = {};
 	buildTrack(game.track);
 
-	game.karts.resize(8);
+	float laneOffsets[KART_PALETTE_COUNT] = {-2.5f, -0.8f, 0.9f, 2.6f, -1.8f, 1.6f, -3.2f, 3.4f};
+	float baseSpeeds[KART_PALETTE_COUNT] = {12.f, 13.2f, 12.8f, 13.5f, 12.5f, 13.0f, 12.3f, 13.8f};
 
-	game.karts[0].controlType = KartControlType::Player;
-	game.karts[0].color = {0.18f, 0.55f, 0.95f};
-	game.karts[0].laneOffset = -2.5f;
-	game.karts[0].baseSpeed = 12.f;
-	game.karts[0].distanceAlongTrack = 0.f;
+	game.karts.resize(KART_PALETTE_COUNT);
+	for (int i = 0; i < KART_PALETTE_COUNT; ++i)
+	{
+		game.karts[i].controlType = (i == 0) ? KartControlType::Player : KartControlType::AI;
+		game.karts[i].color = getKartPaletteColor(i);
+		game.karts[i].laneOffset = laneOffsets[i];
+		game.karts[i].baseSpeed = baseSpeeds[i];
+		game.karts[i].distanceAlongTrack = i * 1.6f;
+	}
 
-	game.karts[1].controlType = KartControlType::AI;
-	game.karts[1].color = {0.95f, 0.3f, 0.2f};
-	game.karts[1].laneOffset = -0.8f;
-	game.karts[1].baseSpeed = 13.2f;
-	game.karts[1].distanceAlongTrack = 1.6f;
-
-	game.karts[2].controlType = KartControlType::AI;
-	game.karts[2].color = {0.95f, 0.8f, 0.2f};
-	game.karts[2].laneOffset = 0.9f;
-	game.karts[2].baseSpeed = 12.8f;
-	game.karts[2].distanceAlongTrack = 3.2f;
-
-	game.karts[3].controlType = KartControlType::AI;
-	game.karts[3].color = {0.2f, 0.85f, 0.45f};
-	game.karts[3].laneOffset = 2.6f;
-	game.karts[3].baseSpeed = 13.5f;
-	game.karts[3].distanceAlongTrack = 4.8f;
-
-	game.karts[4].controlType = KartControlType::AI;
-	game.karts[4].color = {0.75f, 0.25f, 0.85f};
-	game.karts[4].laneOffset = -1.8f;
-	game.karts[4].baseSpeed = 12.5f;
-	game.karts[4].distanceAlongTrack = 6.4f;
-
-	game.karts[5].controlType = KartControlType::AI;
-	game.karts[5].color = {0.95f, 0.55f, 0.7f};
-	game.karts[5].laneOffset = 1.6f;
-	game.karts[5].baseSpeed = 13.0f;
-	game.karts[5].distanceAlongTrack = 8.0f;
-
-	game.karts[6].controlType = KartControlType::AI;
-	game.karts[6].color = {0.4f, 0.75f, 0.85f};
-	game.karts[6].laneOffset = -3.2f;
-	game.karts[6].baseSpeed = 12.3f;
-	game.karts[6].distanceAlongTrack = 9.6f;
-
-	game.karts[7].controlType = KartControlType::AI;
-	game.karts[7].color = {0.85f, 0.6f, 0.3f};
-	game.karts[7].laneOffset = 3.4f;
-	game.karts[7].baseSpeed = 13.8f;
-	game.karts[7].distanceAlongTrack = 11.2f;
-
-	resetRace(game);
+	game.race.phase = RacePhase::MainMenu;
+	game.menu = {};
 	return game;
 }
 
@@ -197,9 +177,68 @@ void resetRace(GameState &game)
 
 void processGameInput(GameState &game, platform::Input &input)
 {
+	if (game.race.phase == RacePhase::MainMenu)
+	{
+		if (input.isButtonPressed(platform::Button::Enter) ||
+			input.isButtonPressed(platform::Button::Space))
+		{
+			game.race.phase = RacePhase::KartSelect;
+			game.menu.selectedKartSlot = 0;
+			game.menu.previewRotation = 0.f;
+		}
+		return;
+	}
+
+	if (game.race.phase == RacePhase::KartSelect)
+	{
+		if (input.isButtonPressed(platform::Button::Left))
+		{
+			game.menu.selectedKartSlot =
+				(game.menu.selectedKartSlot - 1 + KART_PALETTE_COUNT) % KART_PALETTE_COUNT;
+		}
+		if (input.isButtonPressed(platform::Button::Right))
+		{
+			game.menu.selectedKartSlot =
+				(game.menu.selectedKartSlot + 1) % KART_PALETTE_COUNT;
+		}
+		if (input.isButtonPressed(platform::Button::Enter) ||
+			input.isButtonPressed(platform::Button::Space))
+		{
+			glm::vec3 chosenColor = getKartPaletteColor(game.menu.selectedKartSlot);
+			glm::vec3 oldPlayerColor = game.karts[0].color;
+			game.karts[0].color = chosenColor;
+
+			for (int i = 1; i < static_cast<int>(game.karts.size()); ++i)
+			{
+				if (game.karts[i].color == chosenColor)
+				{
+					game.karts[i].color = oldPlayerColor;
+					break;
+				}
+			}
+
+			resetRace(game);
+		}
+		if (input.isButtonPressed(platform::Button::Escape))
+		{
+			game.race.phase = RacePhase::MainMenu;
+		}
+		return;
+	}
+
 	if (input.isButtonPressed(platform::Button::Tab))
 	{
 		game.debug.showOverlay = !game.debug.showOverlay;
+	}
+
+	if (game.race.phase == RacePhase::Finished)
+	{
+		if (input.isButtonPressed(platform::Button::Enter))
+		{
+			game.race.phase = RacePhase::MainMenu;
+			game.menu = {};
+		}
+		return;
 	}
 
 	if (input.isButtonPressed(platform::Button::Enter))
@@ -227,6 +266,17 @@ void updateGameScaffold(GameState &game, float deltaTime)
 	game.events.clear();
 	game.pulseTimer += deltaTime;
 	game.debug.eventFlashTimer = glm::max(0.f, game.debug.eventFlashTimer - deltaTime);
+
+	if (game.race.phase == RacePhase::MainMenu)
+	{
+		return;
+	}
+
+	if (game.race.phase == RacePhase::KartSelect)
+	{
+		game.menu.previewRotation += MENU_KART_SPIN_SPEED * deltaTime;
+		return;
+	}
 
 	if (game.race.phase == RacePhase::Countdown)
 	{
@@ -616,6 +666,8 @@ const char *getRacePhaseName(RacePhase phase)
 {
 	switch (phase)
 	{
+		case RacePhase::MainMenu: return "MainMenu";
+		case RacePhase::KartSelect: return "KartSelect";
 		case RacePhase::Boot: return "Boot";
 		case RacePhase::Countdown: return "Countdown";
 		case RacePhase::Racing: return "Racing";

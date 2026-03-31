@@ -2188,7 +2188,7 @@ or gladLoadGLLoader() or glewInit()?", userDefinedData);
 
 		createFromBuffer((const char *)decodedImage, width, height, pixelated, useMipMaps);
 
-		STBI_FREE(decodedImage);
+		free((void *)decodedImage);
 	}
 
 	void Texture::createFromFileDataWithPixelPadding(const unsigned char *image_file_data, const size_t image_file_size, int blockSize,
@@ -2330,7 +2330,7 @@ or gladLoadGLLoader() or glewInit()?", userDefinedData);
 
 		createFromBuffer((const char *)newData, newW, newH, pixelated, useMipMaps);
 
-		STBI_FREE(decodedImage);
+		free((void *)decodedImage);
 		delete[] newData;
 	}
 

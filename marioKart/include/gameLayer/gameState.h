@@ -8,6 +8,8 @@
 
 enum class RacePhase
 {
+	MainMenu,
+	KartSelect,
 	Boot,
 	Countdown,
 	Racing,
@@ -172,8 +174,15 @@ struct DebugState
 	float eventFlashTimer = 0.f;
 };
 
+struct MenuState
+{
+	int selectedKartSlot = 0;
+	float previewRotation = 0.f;
+};
+
 struct GameState
 {
+	MenuState menu = {};
 	RaceState race = {};
 	TrackState track = {};
 	CameraState camera = {};
@@ -193,3 +202,4 @@ void processGameInput(GameState &game, platform::Input &input);
 void updateGameScaffold(GameState &game, float deltaTime);
 
 const char *getRacePhaseName(RacePhase phase);
+glm::vec3 getKartPaletteColor(int index);

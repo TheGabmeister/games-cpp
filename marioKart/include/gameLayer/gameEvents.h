@@ -9,7 +9,9 @@ enum class GameEventType
 	CheckpointPassed,
 	LapCompleted,
 	KartHitWall,
-	RespawnRequested
+	RespawnRequested,
+	DriftBoosted,
+	BoostPadHit
 };
 
 struct GameEvent

@@ -20,6 +20,13 @@ enum class KartControlType
 	AI
 };
 
+enum class DriftState
+{
+	None,
+	Hopping,
+	Drifting
+};
+
 enum class ItemType
 {
 	None,
@@ -61,6 +68,10 @@ struct KartState
 	float laneOffset = 0.f;
 	float distanceAlongTrack = 0.f;
 	float boostTimer = 0.f;
+	DriftState driftState = DriftState::None;
+	int driftDirection = 0;
+	float driftTimer = 0.f;
+	float driftHopTimer = 0.f;
 	bool offRoad = false;
 	bool wrongWay = false;
 	float wrongWayTimer = 0.f;
@@ -82,10 +93,19 @@ struct Checkpoint
 	float distanceAlongTrack = 0.f;
 };
 
+struct BoostPad
+{
+	glm::vec3 position = {};
+	glm::vec3 direction = {};
+	float halfWidth = 2.f;
+	float halfLength = 1.5f;
+};
+
 struct TrackState
 {
 	std::vector<glm::vec3> centerLine;
 	std::vector<Checkpoint> checkpoints;
+	std::vector<BoostPad> boostPads;
 
 	float totalLength = 0.f;
 	float roadHalfWidth = 0.f;

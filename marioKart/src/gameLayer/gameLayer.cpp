@@ -117,6 +117,14 @@ namespace
 			renderer::drawQuad(center, {1.5f, span}, {0.95f, 0.95f, 0.95f}, angle);
 		}
 
+		// Boost pads
+		for (const BoostPad &pad : track.boostPads)
+		{
+			float angle = std::atan2(pad.direction.x, pad.direction.z);
+			renderer::drawQuad(pad.position, {pad.halfWidth * 2.f, pad.halfLength * 2.f},
+				{0.95f, 0.55f, 0.1f}, angle);
+		}
+
 		// Checkpoint markers
 		for (int i = 1; i < static_cast<int>(track.checkpoints.size()); ++i)
 		{

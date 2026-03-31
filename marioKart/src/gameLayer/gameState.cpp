@@ -189,6 +189,11 @@ namespace
 		addCheckpoint(5, {0.f, 0.f, 1.f});     // Right apex
 		addCheckpoint(9, {-1.f, 0.f, 0.f});    // Top-left
 		addCheckpoint(12, {0.f, 0.f, -1.f});   // Left apex
+
+		// Boost pads
+		track.boostPads.clear();
+		track.boostPads.push_back({{0.f, 0.01f, -16.f}, {1.f, 0.f, 0.f}, 3.f, 1.5f});
+		track.boostPads.push_back({{0.f, 0.01f, 16.f}, {-1.f, 0.f, 0.f}, 3.f, 1.5f});
 	}
 
 	void updateKartTransform(KartState &kart, const TrackState &track)
@@ -417,6 +422,10 @@ void resetRace(GameState &game)
 		kart.speed = 0.f;
 		kart.desiredSpeed = kart.baseSpeed;
 		kart.boostTimer = 0.f;
+		kart.driftState = DriftState::None;
+		kart.driftDirection = 0;
+		kart.driftTimer = 0.f;
+		kart.driftHopTimer = 0.f;
 		kart.offRoad = false;
 		kart.wrongWay = false;
 		kart.wrongWayTimer = 0.f;
@@ -453,6 +462,7 @@ void processGameInput(GameState &game, platform::Input &input)
 			kart.input.steer = 0.f;
 			if (input.isButtonHeld(platform::Button::Left)) { kart.input.steer -= 1.f; }
 			if (input.isButtonHeld(platform::Button::Right)) { kart.input.steer += 1.f; }
+			kart.input.driftPressed = input.isButtonHeld(platform::Button::LeftShift);
 		}
 	}
 }
@@ -490,12 +500,14 @@ void updateGameScaffold(GameState &game, float deltaTime)
 
 		if (kart.controlType == KartControlType::Player)
 		{
+			float boostBonus = (kart.boostTimer > 0.f) ? BOOST_EXTRA_SPEED : 0.f;
 			float accelFactor = kart.offRoad ? OFF_ROAD_ACCEL_FACTOR : 1.f;
-			float maxSpeed = kart.offRoad ? (KART_MAX_SPEED * OFF_ROAD_SPEED_FACTOR) : KART_MAX_SPEED;
+			float maxSpeed = (kart.offRoad ? (KART_MAX_SPEED * OFF_ROAD_SPEED_FACTOR) : KART_MAX_SPEED) + boostBonus;
 			float drag = KART_DRAG + (kart.offRoad ? OFF_ROAD_EXTRA_DRAG : 0.f);
 
 			if (frozen)
 			{
+				if (kart.driftState != DriftState::None) { kart.driftState = DriftState::None; kart.driftTimer = 0.f; }
 				if (kart.speed > 0.f) { kart.speed -= drag * deltaTime; if (kart.speed < 0.f) { kart.speed = 0.f; } }
 				else if (kart.speed < 0.f) { kart.speed += drag * deltaTime; if (kart.speed > 0.f) { kart.speed = 0.f; } }
 			}
@@ -538,18 +550,75 @@ void updateGameScaffold(GameState &game, float deltaTime)
 				if (kart.speed < maxSpeed) { kart.speed = maxSpeed; }
 			}
 
+			// Drift state machine
+			if (kart.driftState == DriftState::None)
+			{
+				if (kart.input.driftPressed && std::abs(kart.input.steer) > 0.1f
+					&& std::abs(kart.speed) > DRIFT_MIN_SPEED)
+				{
+					kart.driftState = DriftState::Hopping;
+					kart.driftDirection = (kart.input.steer > 0.f) ? 1 : -1;
+					kart.driftHopTimer = 0.f;
+					kart.driftTimer = 0.f;
+				}
+			}
+			else if (kart.driftState == DriftState::Hopping)
+			{
+				kart.driftHopTimer += deltaTime;
+				if (kart.driftHopTimer >= DRIFT_HOP_DURATION)
+				{
+					kart.driftState = DriftState::Drifting;
+				}
+				if (!kart.input.driftPressed)
+				{
+					kart.driftState = DriftState::None;
+				}
+			}
+			else if (kart.driftState == DriftState::Drifting)
+			{
+				kart.driftTimer += deltaTime;
+				if (!kart.input.driftPressed || std::abs(kart.speed) < 1.f)
+				{
+					if (kart.driftTimer >= MINI_TURBO_MIN_DRIFT_TIME)
+					{
+						kart.boostTimer = MINI_TURBO_DURATION;
+						game.events.push({GameEventType::DriftBoosted, i});
+					}
+					kart.driftState = DriftState::None;
+					kart.driftTimer = 0.f;
+				}
+			}
+
 			// Steering (only when moving)
 			if (std::abs(kart.speed) > 0.1f)
 			{
 				float speedFactor = 1.f - KART_STEER_SPEED_REDUCTION *
 					glm::clamp(std::abs(kart.speed) / KART_MAX_SPEED, 0.f, 1.f);
-				kart.heading -= kart.input.steer * KART_STEER_RATE * speedFactor * deltaTime;
+				if (kart.driftState == DriftState::Drifting)
+				{
+					float driftSteer = static_cast<float>(kart.driftDirection) * DRIFT_STEER_BIAS
+						+ kart.input.steer * DRIFT_STEER_RATE;
+					kart.heading -= driftSteer * speedFactor * deltaTime;
+				}
+				else
+				{
+					kart.heading -= kart.input.steer * KART_STEER_RATE * speedFactor * deltaTime;
+				}
 			}
 
 			// Move by velocity
 			glm::vec3 forward = {std::cos(kart.heading), 0.f, std::sin(kart.heading)};
 			kart.velocity = forward * kart.speed;
 			kart.position += kart.velocity * deltaTime;
+
+			// Lateral slip during drift
+			if (kart.driftState == DriftState::Drifting)
+			{
+				glm::vec3 right = {-std::sin(kart.heading), 0.f, std::cos(kart.heading)};
+				float slipScale = glm::clamp(std::abs(kart.speed) / KART_MAX_SPEED, 0.f, 1.f);
+				kart.position += right * (-static_cast<float>(kart.driftDirection)
+					* DRIFT_LATERAL_SLIP * slipScale * deltaTime);
+			}
 			kart.position.y = 0.f;
 
 			// Track query: wall collision, off-road, and distance
@@ -561,6 +630,12 @@ void updateGameScaffold(GameState &game, float deltaTime)
 				kart.position = q.closestPoint + q.normal * game.track.wallHalfWidth;
 				kart.position.y = 0.f;
 				kart.speed *= WALL_BOUNCE_SPEED_RETAIN;
+				if (kart.driftState != DriftState::None)
+				{
+					kart.driftState = DriftState::None;
+					kart.driftTimer = 0.f;
+				}
+				kart.boostTimer *= 0.5f;
 				game.events.push({GameEventType::KartHitWall, i});
 			}
 
@@ -588,6 +663,7 @@ void updateGameScaffold(GameState &game, float deltaTime)
 			// AI: on-rails movement
 			float variation = std::sin(game.race.raceTimer * 0.7f + i * 0.8f) * 0.85f;
 			kart.desiredSpeed = kart.baseSpeed + variation;
+			if (kart.boostTimer > 0.f) { kart.desiredSpeed += BOOST_EXTRA_SPEED; }
 
 			if (frozen) { kart.desiredSpeed = 0.f; }
 
@@ -597,6 +673,32 @@ void updateGameScaffold(GameState &game, float deltaTime)
 			kart.distanceAlongTrack += kart.speed * deltaTime;
 
 			updateKartTransform(kart, game.track);
+		}
+
+		// Boost pad detection (shared)
+		for (const BoostPad &pad : game.track.boostPads)
+		{
+			glm::vec3 toKart = kart.position - pad.position;
+			glm::vec3 padForward = glm::normalize(pad.direction);
+			glm::vec3 padRight = {-padForward.z, 0.f, padForward.x};
+			float forwardDist = std::abs(glm::dot(toKart, padForward));
+			float rightDist = std::abs(glm::dot(toKart, padRight));
+
+			if (forwardDist < pad.halfLength && rightDist < pad.halfWidth)
+			{
+				if (kart.boostTimer <= 0.f)
+				{
+					game.events.push({GameEventType::BoostPadHit, i});
+				}
+				kart.boostTimer = BOOST_PAD_DURATION;
+			}
+		}
+
+		// Boost timer countdown (shared)
+		if (kart.boostTimer > 0.f)
+		{
+			kart.boostTimer -= deltaTime;
+			if (kart.boostTimer < 0.f) { kart.boostTimer = 0.f; }
 		}
 
 		// Checkpoint and lap logic (shared)

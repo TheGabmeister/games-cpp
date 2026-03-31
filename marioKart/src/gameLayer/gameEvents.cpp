@@ -20,6 +20,8 @@ const char *getGameEventName(GameEventType type)
 		case GameEventType::LapCompleted: return "LapCompleted";
 		case GameEventType::KartHitWall: return "KartHitWall";
 		case GameEventType::RespawnRequested: return "RespawnRequested";
+		case GameEventType::DriftBoosted: return "DriftBoosted";
+		case GameEventType::BoostPadHit: return "BoostPadHit";
 		default: return "UnknownEvent";
 	}
 }

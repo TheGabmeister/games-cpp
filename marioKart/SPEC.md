@@ -403,6 +403,74 @@ Persistent save data is not required for the first playable version.
 - best laps, settings, and unlocks are out of scope initially
 - do not design core gameplay systems around save/load dependencies
 
+## Event System
+
+The game should use a lightweight synchronous event queue, not a large engine-style event bus.
+
+Core rule:
+
+- gameplay state is the source of truth
+- events are short-lived notifications about discrete gameplay moments
+
+This means:
+
+- continuous systems like steering, drift tuning, kart velocity, AI movement, and ranking math should update state directly
+- events should be emitted only when another system may need to react to a discrete transition or gameplay result
+
+Recommended event uses:
+
+- race started
+- race finished
+- checkpoint passed
+- lap completed
+- item box collected
+- item used
+- kart hit wall
+- kart hit hazard
+- kart hit projectile
+- respawn requested
+- respawn completed
+- boost started
+- boost ended
+
+Events should be:
+
+- frame-local or tick-local
+- synchronous
+- easy to inspect in logs or debug overlays
+- cleared after the current simulation step or frame
+
+Events should not be:
+
+- a replacement for direct gameplay state
+- asynchronous
+- subscription-heavy
+- used for every tiny gameplay action
+
+Recommended first-pass structure:
+
+- `GameEventType` enum for event kinds
+- `GameEvent` struct with subject kart/entity ids and small payload fields
+- `EventQueue` stored on `GameState`
+
+Recommended update flow:
+
+1. clear old events at the start of the simulation step
+2. update gameplay systems in order
+3. push events as discrete things happen
+4. let later systems, HUD, and debug logging inspect those events during the same step
+5. discard them before the next step
+
+The initial implementation only needs a small subset of events:
+
+- `RaceStarted`
+- `CheckpointPassed`
+- `LapCompleted`
+- `KartHitWall`
+- `RespawnRequested`
+
+This is enough to support the early roadmap without overbuilding the architecture.
+
 ## Architecture Guidance
 
 Recommended state containers:

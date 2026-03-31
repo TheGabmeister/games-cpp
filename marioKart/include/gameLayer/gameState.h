@@ -1,0 +1,137 @@
+#pragma once
+
+#include "gameEvents.h"
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+#include <platform/platformInput.h>
+#include <vector>
+
+enum class RacePhase
+{
+	Boot,
+	Countdown,
+	Racing,
+	Finished
+};
+
+enum class KartControlType
+{
+	Player,
+	AI
+};
+
+enum class ItemType
+{
+	None,
+	Mushroom,
+	Banana,
+	GreenShell,
+	RedShell
+};
+
+struct KartProgress
+{
+	int currentLap = 0;
+	int checkpointIndex = 0;
+	float segmentProgress = 0.f;
+	bool finished = 0;
+};
+
+struct KartInputState
+{
+	float throttle = 0.f;
+	float steer = 0.f;
+	bool brake = 0;
+	bool driftPressed = 0;
+	bool useItemPressed = 0;
+};
+
+struct KartState
+{
+	KartControlType controlType = KartControlType::Player;
+
+	glm::vec3 position = {};
+	glm::vec3 velocity = {};
+	glm::vec3 color = {0.2f, 0.6f, 1.f};
+
+	float heading = 0.f;
+	float speed = 0.f;
+	float desiredSpeed = 0.f;
+	float baseSpeed = 0.f;
+	float laneOffset = 0.f;
+	float distanceAlongTrack = 0.f;
+	float boostTimer = 0.f;
+
+	ItemType heldItem = ItemType::None;
+
+	KartInputState input = {};
+	KartProgress progress = {};
+
+	glm::vec3 lastSafePosition = {};
+	float lastSafeHeading = 0.f;
+};
+
+struct Checkpoint
+{
+	glm::vec3 start = {};
+	glm::vec3 end = {};
+	glm::vec3 forward = {};
+	float distanceAlongTrack = 0.f;
+};
+
+struct TrackState
+{
+	std::vector<glm::vec3> centerLine;
+	std::vector<Checkpoint> checkpoints;
+
+	float totalLength = 0.f;
+	float roadHalfWidth = 0.f;
+
+	glm::vec2 boundsMin = {};
+	glm::vec2 boundsMax = {};
+};
+
+struct CameraState
+{
+	glm::vec3 position = {};
+	glm::vec3 target = {};
+	float distance = 12.f;
+	float height = 8.f;
+};
+
+struct RaceState
+{
+	RacePhase phase = RacePhase::Boot;
+	int totalLaps = 3;
+	int playerKartIndex = 0;
+	int playerPlace = 1;
+	float countdownTimer = 3.f;
+	float raceTimer = 0.f;
+	float finishedTimer = 0.f;
+	std::vector<int> ranking;
+};
+
+struct DebugState
+{
+	bool showOverlay = 1;
+	float eventFlashTimer = 0.f;
+};
+
+struct GameState
+{
+	RaceState race = {};
+	TrackState track = {};
+	CameraState camera = {};
+	DebugState debug = {};
+
+	std::vector<KartState> karts;
+	EventQueue events = {};
+
+	float pulseTimer = 0.f;
+};
+
+GameState createDefaultGameState();
+void resetRace(GameState &game);
+void updateGameScaffold(GameState &game, float deltaTime, platform::Input &input);
+
+const char *getRacePhaseName(RacePhase phase);

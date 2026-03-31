@@ -1,6 +1,3 @@
-#https://github.com/meemknight/cmakeSetup
-#Version 1.1.0
-
 cmake_minimum_required(VERSION 3.16)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -30,7 +27,7 @@ if(MSVC)
 add_compile_options(/arch:AVX2) #make sure SIMD optimizations take place
 endif()
 
-project(mygame)
+project(mariokart)
 
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)

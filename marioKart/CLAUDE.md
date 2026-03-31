@@ -4,84 +4,83 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A cross-platform C++17 OpenGL game template (by meemknight) providing windowing, input, 2D rendering, UI, audio, and save systems. Developers write game logic in `initGame()`, `gameLogic()`, and `closeGame()` — the platform layer handles everything else.
+A C++17 OpenGL 3.3 game built on a platform/game-layer split. The platform layer handles windowing (GLFW), OpenGL setup (GLAD), input, and the main loop. Game code lives entirely in three entry points: `initGame()`, `gameLogic()`, `closeGame()`.
 
-## Build System
+The CMake target is named `mariokart`.
 
-CMake 3.16+ with auto-discovered sources (`file(GLOB_RECURSE)` over `src/*.cpp`).
+## Build
 
-**Build (Visual Studio on Windows):**
-```
-# Open folder in VS, Ctrl+S on CMakeLists.txt to configure, then Ctrl+F5 to build+run
-# Select "mygame.exe" from the startup item dropdown
-```
-
-**Build (command line):**
-```
-cmake -B out -S .
-cmake --build out
+```bash
+cmake -S . -B build
+cmake --build build
 ```
 
-**Production build:** Set `PRODUCTION_BUILD` to `ON` in CMakeLists.txt, delete `out/` folder, rebuild. This switches `RESOURCES_PATH` to relative paths, enables LTO, and removes the console window.
+In Visual Studio: open the folder, Ctrl+S on CMakeLists.txt to configure, select `mariokart.exe` from the startup dropdown, Ctrl+F5 to run.
 
-**No test framework is configured.**
+**Production build:** Set `PRODUCTION_BUILD` to `ON` in CMakeLists.txt, delete the build folder, rebuild. This switches `RESOURCES_PATH` to relative paths, enables LTO, and removes the console window.
+
+**No test framework.** Validate with a successful build and manual smoke run.
 
 ## Key Build Macros
 
-- `RESOURCES_PATH` — absolute path to `resources/` in dev, `./resources/` in production. Always use this macro to reference assets.
-- `PRODUCTION_BUILD` / `DEVELOPLEMT_BUILD` (note: typo is intentional in codebase) — toggles debug vs shipping behavior.
+- `RESOURCES_PATH` — absolute path to `resources/` in dev, `./resources/` in production. Always use this macro for asset paths.
+- `PRODUCTION_BUILD` / `DEVELOPLEMT_BUILD` — the typo is intentional; do not fix unless explicitly asked.
 - `GLFW_INCLUDE_NONE=1` — GLAD loads OpenGL, not GLFW.
 
 ## Architecture
 
-**Two-layer design:**
-- **Platform layer** (`src/platform/`, `include/platform/`) — GLFW window, OpenGL init, input collection, main loop, ImGui setup. Do not modify unless changing platform behavior.
-- **Game layer** (`src/gameLayer/`, `include/gameLayer/`) — where all game code goes. Three entry points in `gameLayer.h`:
-  - `initGame()` — called once at startup
-  - `gameLogic(float deltaTime, platform::Input &input)` — called every frame; return `false` to quit
-  - `closeGame()` — called on shutdown (not guaranteed on force-close)
+**Platform layer** (`src/platform/`, `include/platform/`):
+- `glfwMain.cpp` — `main()`, GLFW/OpenGL init, main loop, input collection, fullscreen handling, platform file I/O
+- `platformInput.cpp` — keyboard (32 buttons), mouse, controller state tracking with press/held/release/typed semantics
+- `logs.cpp` — file + console logging with timestamps
+- `errorReporting.cpp` — OpenGL debug output callback
+- `platformTools.cpp` — assertion helpers (`permaAssert`), `defer()` RAII macro
+- Do not modify platform code unless the task requires it.
 
-**Adding new files:** Place `.cpp` in `src/gameLayer/`, `.h` in `include/gameLayer/`. CMake auto-discovers them. When Visual Studio prompts "Add to CMake?" always say **NO**.
+**Game layer** (`src/gameLayer/`, `include/gameLayer/`):
+- `gameLayer.cpp` — implements the three entry points
+- `gameLayer.h` — declares entry points and exposes platform API to game code
 
-## Key Libraries (in `thirdparty/`)
+```cpp
+bool initGame();                                          // called once at startup
+bool gameLogic(float deltaTime, platform::Input &input);  // called every frame; return false to quit
+void closeGame();                                         // called on shutdown (not guaranteed on force-close)
+```
+
+**Adding new files:** Place `.cpp` in `src/gameLayer/`, `.h` in `include/gameLayer/`. CMake auto-discovers via `file(GLOB_RECURSE)`. When the IDE prompts "Add to CMake?" always say **NO**.
+
+## Libraries (in `thirdparty/`)
 
 | Library | Purpose |
 |---------|---------|
-| gl2d | 2D batch renderer (textures, shapes, text, cameras, particles) |
-| glui | Game menu UI built on gl2d |
-| imgui-docking | Debug/tool UI with docking and Font Awesome icons |
-| glm | Math (vectors, matrices) |
-| GLFW 3.3.2 | Windowing and input |
-| GLAD | OpenGL 3.3 loader |
-| raudio | Audio playback (miniaudio-based) |
-| safeSave | Binary save system with automatic backups |
-| stb_image/stb_truetype | Image and font loading |
-| enet 1.3.17 | Networking (commented out by default — uncomment in CMakeLists.txt to enable) |
+| GLFW 3.4 | Windowing and input |
+| GLAD | OpenGL 3.3 function loader |
+| glm 1.0.3 | Math (vectors, matrices) |
+| stb_image | Image loading |
+| stb_truetype | TTF font loading |
+| raudio | Audio playback (miniaudio-based, built with `RAUDIO_STANDALONE`) |
 
 ## Input System
 
-Access via `platform::Input &input` parameter in `gameLogic()`:
-- `input.isButtonHeld/Pressed/Released(platform::Button::X)` for keyboard
+Access via `platform::Input &input` in `gameLogic()`:
+- `input.isButtonHeld/Pressed/Released/Typed(platform::Button::X)` for keyboard
 - `input.lMouse`, `input.rMouse` for mouse buttons
 - `input.mouseX`, `input.mouseY` for mouse position
 - `input.deltaTime` for frame time
 - `input.typedInput` for text input characters
+- `input.controller` for gamepad
 
-## Platform Utilities (`platform::` namespace)
+## Platform Utilities (`platform::` namespace, declared in `gameLayer.h`)
 
-- `writeEntireFile()` / `readEntireFile()` — binary file I/O for save data
+- `writeEntireFile()` / `readEntireFile()` / `appendToFile()` — binary file I/O
 - `setFullScreen()` / `isFullScreen()` — fullscreen toggling
-- `getFrameBufferSize()` — use for `glViewport` (may differ from window size)
+- `getFrameBufferSize()` — use for `glViewport` (may differ from window size on HiDPI)
 - `getWindowSize()` — logical window dimensions
 - `showMouse()` / `getRelMousePosition()` / `setRelMousePosition()`
 
-## Rendering Pattern
+## Rendering
 
-```cpp
-gl2d::Renderer2D renderer;
-// In initGame(): gl2d::init(); renderer.create();
-// In gameLogic(): renderer.updateWindowMetrics(w, h); /* draw calls */ renderer.flush();
-```
+Currently uses raw OpenGL calls with custom vertex/fragment shaders (`resources/vertex.vert`, `resources/fragment.frag`). No 2D renderer library is linked.
 
 ## MSVC-Specific
 

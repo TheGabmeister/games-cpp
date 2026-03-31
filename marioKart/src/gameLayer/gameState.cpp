@@ -372,7 +372,7 @@ GameState createDefaultGameState()
 	GameState game = {};
 	buildTrack(game.track);
 
-	game.karts.resize(4);
+	game.karts.resize(8);
 
 	game.karts[0].controlType = KartControlType::Player;
 	game.karts[0].color = {0.18f, 0.55f, 0.95f};
@@ -397,6 +397,30 @@ GameState createDefaultGameState()
 	game.karts[3].laneOffset = 2.6f;
 	game.karts[3].baseSpeed = 13.5f;
 	game.karts[3].distanceAlongTrack = 4.8f;
+
+	game.karts[4].controlType = KartControlType::AI;
+	game.karts[4].color = {0.75f, 0.25f, 0.85f};
+	game.karts[4].laneOffset = -1.8f;
+	game.karts[4].baseSpeed = 12.5f;
+	game.karts[4].distanceAlongTrack = 6.4f;
+
+	game.karts[5].controlType = KartControlType::AI;
+	game.karts[5].color = {0.95f, 0.55f, 0.7f};
+	game.karts[5].laneOffset = 1.6f;
+	game.karts[5].baseSpeed = 13.0f;
+	game.karts[5].distanceAlongTrack = 8.0f;
+
+	game.karts[6].controlType = KartControlType::AI;
+	game.karts[6].color = {0.4f, 0.75f, 0.85f};
+	game.karts[6].laneOffset = -3.2f;
+	game.karts[6].baseSpeed = 12.3f;
+	game.karts[6].distanceAlongTrack = 9.6f;
+
+	game.karts[7].controlType = KartControlType::AI;
+	game.karts[7].color = {0.85f, 0.6f, 0.3f};
+	game.karts[7].laneOffset = 3.4f;
+	game.karts[7].baseSpeed = 13.8f;
+	game.karts[7].distanceAlongTrack = 11.2f;
 
 	resetRace(game);
 	return game;
@@ -430,6 +454,7 @@ void resetRace(GameState &game)
 		kart.wrongWay = false;
 		kart.wrongWayTimer = 0.f;
 		kart.heldItem = ItemType::None;
+		kart.stuckTimer = 0.f;
 		kart.progress = {};
 		kart.distanceAlongTrack = i * 1.6f;
 
@@ -660,9 +685,39 @@ void updateGameScaffold(GameState &game, float deltaTime)
 		}
 		else
 		{
-			// AI: on-rails movement
+			// AI: waypoint-based movement with pacing
+
+			// Corner speed: look ahead and slow for sharp turns
+			float aheadDist = kart.distanceAlongTrack + AI_CORNER_LOOK_AHEAD;
+			glm::vec3 currentFwd = sampleTrackForward(game.track, kart.distanceAlongTrack);
+			glm::vec3 aheadFwd = sampleTrackForward(game.track, aheadDist);
+			float cornerDot = glm::dot(currentFwd, aheadFwd);
+			float cornerFactor = 1.f;
+			if (cornerDot < (1.f - AI_CORNER_ANGLE_THRESHOLD))
+			{
+				cornerFactor = glm::mix(AI_CORNER_SPEED_FACTOR, 1.f,
+					glm::clamp((cornerDot - 0.f) / (1.f - AI_CORNER_ANGLE_THRESHOLD), 0.f, 1.f));
+			}
+
+			// Rubber-banding: adjust speed based on distance to player
+			const KartState &playerKart = game.karts[game.race.playerKartIndex];
+			float playerDist = playerKart.distanceAlongTrack
+				+ playerKart.progress.currentLap * game.track.totalLength;
+			float aiDist = kart.distanceAlongTrack
+				+ kart.progress.currentLap * game.track.totalLength;
+			float gap = playerDist - aiDist;
+			float rubberBand = 0.f;
+			if (gap > 0.f)
+			{
+				rubberBand = AI_RUBBER_BAND_BOOST * glm::clamp(gap / AI_RUBBER_BAND_DISTANCE, 0.f, 1.f);
+			}
+			else
+			{
+				rubberBand = -AI_RUBBER_BAND_SLOW * glm::clamp(-gap / AI_RUBBER_BAND_DISTANCE, 0.f, 1.f);
+			}
+
 			float variation = std::sin(game.race.raceTimer * 0.7f + i * 0.8f) * 0.85f;
-			kart.desiredSpeed = kart.baseSpeed + variation;
+			kart.desiredSpeed = (kart.baseSpeed + variation + rubberBand) * cornerFactor;
 			if (kart.boostTimer > 0.f) { kart.desiredSpeed += BOOST_EXTRA_SPEED; }
 
 			if (frozen) { kart.desiredSpeed = 0.f; }
@@ -672,7 +727,41 @@ void updateGameScaffold(GameState &game, float deltaTime)
 
 			kart.distanceAlongTrack += kart.speed * deltaTime;
 
-			updateKartTransform(kart, game.track);
+			// Oscillating lane offset for varied paths
+			float baseLane = kart.laneOffset;
+			float laneOscillation = std::sin(kart.distanceAlongTrack * 0.08f + i * 1.5f) * 1.5f;
+			float effectiveLane = baseLane + laneOscillation;
+			effectiveLane = glm::clamp(effectiveLane, -game.track.roadHalfWidth + 1.f,
+				game.track.roadHalfWidth - 1.f);
+
+			glm::vec3 trackForward = sampleTrackForward(game.track, kart.distanceAlongTrack);
+			glm::vec3 right = glm::normalize(glm::vec3{-trackForward.z, 0.f, trackForward.x});
+			kart.position = sampleTrackPosition(game.track, kart.distanceAlongTrack) + right * effectiveLane;
+			kart.velocity = trackForward * kart.speed;
+			kart.heading = std::atan2(trackForward.z, trackForward.x);
+
+			// Stuck detection and recovery
+			if (!frozen && game.race.phase == RacePhase::Racing)
+			{
+				if (std::abs(kart.speed) < AI_STUCK_SPEED_THRESHOLD)
+				{
+					kart.stuckTimer += deltaTime;
+					if (kart.stuckTimer >= AI_STUCK_TIME)
+					{
+						kart.distanceAlongTrack += 10.f;
+						kart.speed = kart.baseSpeed * 0.5f;
+						kart.stuckTimer = 0.f;
+						game.events.push({GameEventType::AIRecovered, i});
+					}
+				}
+				else
+				{
+					kart.stuckTimer = 0.f;
+				}
+			}
+
+			kart.lastSafePosition = kart.position;
+			kart.lastSafeHeading = kart.heading;
 		}
 
 		// Boost pad detection (shared)

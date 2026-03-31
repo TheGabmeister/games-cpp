@@ -42,3 +42,13 @@ constexpr float MINI_TURBO_DURATION = 0.6f;
 // Boost
 constexpr float BOOST_EXTRA_SPEED = 6.f;
 constexpr float BOOST_PAD_DURATION = 0.5f;
+
+// AI
+constexpr float AI_CORNER_LOOK_AHEAD = 8.f;
+constexpr float AI_CORNER_SPEED_FACTOR = 0.6f;
+constexpr float AI_CORNER_ANGLE_THRESHOLD = 0.3f;
+constexpr float AI_STUCK_TIME = 2.f;
+constexpr float AI_STUCK_SPEED_THRESHOLD = 0.5f;
+constexpr float AI_RUBBER_BAND_DISTANCE = 30.f;
+constexpr float AI_RUBBER_BAND_BOOST = 2.5f;
+constexpr float AI_RUBBER_BAND_SLOW = 1.5f;

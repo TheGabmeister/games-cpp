@@ -22,6 +22,7 @@ const char *getGameEventName(GameEventType type)
 		case GameEventType::RespawnRequested: return "RespawnRequested";
 		case GameEventType::DriftBoosted: return "DriftBoosted";
 		case GameEventType::BoostPadHit: return "BoostPadHit";
+		case GameEventType::AIRecovered: return "AIRecovered";
 		default: return "UnknownEvent";
 	}
 }

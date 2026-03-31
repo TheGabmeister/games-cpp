@@ -83,6 +83,7 @@ struct KartState
 
 	glm::vec3 lastSafePosition = {};
 	float lastSafeHeading = 0.f;
+	float stuckTimer = 0.f;
 };
 
 struct Checkpoint

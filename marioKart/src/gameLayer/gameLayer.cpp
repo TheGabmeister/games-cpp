@@ -200,6 +200,34 @@ namespace
 			drawRectPixels(framebufferHeight, framebufferWidth, {x, y, barWidth, barHeight}, gameData.karts[kartIndex].color);
 		}
 
+		// Player place indicator (stacked dots: fewer = better)
+		{
+			int place = gameData.race.playerPlace;
+			int totalKarts = static_cast<int>(gameData.karts.size());
+			glm::vec3 placeColor = (place <= 1) ? glm::vec3(0.95f, 0.84f, 0.22f)
+				: (place <= 3) ? glm::vec3(0.7f, 0.7f, 0.75f)
+				: glm::vec3(0.55f, 0.35f, 0.2f);
+			int dotSize = 8;
+			int spacing = 12;
+			int startX = framebufferWidth / 2 - (place * spacing) / 2;
+			int y = 20;
+			for (int p = 0; p < place; ++p)
+			{
+				drawRectPixels(framebufferHeight, framebufferWidth,
+					{startX + p * spacing, y, dotSize, dotSize}, placeColor);
+			}
+
+			// Background bar showing total field size
+			int totalWidth = totalKarts * spacing;
+			int bgX = framebufferWidth / 2 - totalWidth / 2;
+			drawRectPixels(framebufferHeight, framebufferWidth,
+				{bgX, y + dotSize + 2, totalWidth, 3}, {0.2f, 0.2f, 0.22f});
+			int filledWidth = place * spacing;
+			int fillX = framebufferWidth / 2 - totalWidth / 2;
+			drawRectPixels(framebufferHeight, framebufferWidth,
+				{fillX, y + dotSize + 2, filledWidth, 3}, placeColor);
+		}
+
 		if (gameData.debug.eventFlashTimer > 0.f)
 		{
 			float flashRatio = glm::clamp(gameData.debug.eventFlashTimer / 0.35f, 0.f, 1.f);

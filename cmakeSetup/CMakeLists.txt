@@ -5,24 +5,13 @@ cmake_minimum_required(VERSION 3.16)
 
 set(CMAKE_CXX_STANDARD 17)
 
-#! ! ! ! ! ! !
-#set this to ON instead of OFF to ship the game!
-#basically this will change the RESOURCES_PATH to be the local path
-#! ! ! ! ! ! !
-set(PRODUCTION_BUILD OFF CACHE BOOL "Make this a production build" FORCE)
-#delete the out folder after changing if visual studio doesn recognize the change!
 
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Release>:Release>")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
 
-#may give problems on linux
-if(PRODUCTION_BUILD)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE) #link time optimization
-else()
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION FALSE)
-endif()
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
 
 
 
@@ -67,21 +56,19 @@ set_property(TARGET "${CMAKE_PROJECT_NAME}" PROPERTY CXX_STANDARD 17)
 
 target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC GLFW_INCLUDE_NONE=1) 
 
-if(PRODUCTION_BUILD)
-	# setup the ASSETS_PATH macro to be in the root folder of your exe
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC RESOURCES_PATH="./resources/") 
+target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC RESOURCES_PATH="./resources/")
+target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC
+	$<$<CONFIG:Debug>:PRODUCTION_BUILD=0>
+	$<$<CONFIG:Debug>:DEVELOPLEMT_BUILD=1>
+	$<$<CONFIG:Release>:PRODUCTION_BUILD=1>
+	$<$<CONFIG:Release>:DEVELOPLEMT_BUILD=0>
+)
 
-	# remove the option to debug asserts.
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC PRODUCTION_BUILD=1) 
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC DEVELOPLEMT_BUILD=0) 
-
-else()
-	# This is useful to get an ASSETS_PATH in your IDE during development
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC RESOURCES_PATH="${CMAKE_CURRENT_SOURCE_DIR}/resources/")
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC PRODUCTION_BUILD=0) 
-	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC DEVELOPLEMT_BUILD=1) 
-
-endif()
+add_custom_command(TARGET "${CMAKE_PROJECT_NAME}" POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	"${CMAKE_CURRENT_SOURCE_DIR}/resources"
+	"$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>/resources"
+)
 
 target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES} )
 

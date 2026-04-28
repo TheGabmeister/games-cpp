@@ -1,0 +1,13 @@
+{
+  "model": "claude-opus-4-6[1m]",
+  "permissions": {
+    "deny": [
+      "Read(../**)",
+      "Edit(../**)",
+      "Write(../**)",
+      "Glob(../**)",
+      "Grep(../**)",
+      "Bash(cd ../**)"
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake --help)",
+      "Bash(cmake --build build)",
+      "Bash(cmake -B build -Wno-dev)",
+      "Bash(cmake --build build --config Release)",
+      "Bash(cmake -S . -B build)",
+      "Bash(cmake -B build -G \"Visual Studio 18 2026\" -A x64 -Wno-dev)",
+      "Bash(cmake -S . -B build -G \"Visual Studio 18 2026\" -A x64 -Wno-dev)"
+    ]
+  }
+}

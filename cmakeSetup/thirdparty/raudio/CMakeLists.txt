@@ -14,7 +14,7 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 # Directory Variables
-set(RAUDIO_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+set(RAUDIO_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 set(RAUDIO_SRC ${RAUDIO_ROOT}/src)
 set(RAUDIO_EXAMPLES ${RAUDIO_ROOT}/examples)
 
@@ -40,10 +40,10 @@ target_compile_definitions(raudio PUBLIC
     SUPPORT_MODULE_RAUDIO
 )
 
-# Dependenices
-target_link_libraries(raudio
-    m # math
-)
+# Dependencies
+if (NOT WIN32)
+    target_link_libraries(raudio m)
+endif()
 
 # Audio file support options
 if (SUPPORT_FILEFORMAT_WAV)

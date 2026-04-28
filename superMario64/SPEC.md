@@ -4,11 +4,12 @@ A simplified recreation of Super Mario 64 focused on core gameplay mechanics wit
 
 ## Rendering Approach
 
-Simple 3D using OpenGL (replacing the current gl2d 2D renderer). Levels built from basic geometry (cubes, ramps, cylinders). Characters and enemies are simple meshes or billboarded sprites. No complex texturing or lighting required — flat/vertex colors and basic diffuse shading are sufficient.
+- **3D world:** Direct OpenGL 3.3 Core for the game world. Levels built from basic geometry (cubes, ramps, cylinders). Characters and enemies are simple meshes or billboarded sprites. No complex texturing or lighting required — flat/vertex colors and basic diffuse shading are sufficient.
+- **2D overlays:** gl2d + glui for all HUD elements (health meter, coin counter, star count, lives) and game menus (title screen, file select, star select, pause menu).
 
 ## Core Movement
 
-Mario's movement is analog — walking speed is proportional to stick deflection. Full tilt = run.
+Mario's movement is analog — walking speed is proportional to stick deflection. Full tilt = run. Mario accelerates and decelerates smoothly, not instantly. Turning at high speed causes a skid/brake animation before reversing direction.
 
 ### Ground Moves
 
@@ -50,30 +51,187 @@ Mario's movement is analog — walking speed is proportional to stick deflection
 | Ledge grab | Auto | Mario grabs ledges when jumping near them |
 | Climb | Auto near pole/tree | Climb vertical poles; jump off with A |
 | Swim (surface) | A to stroke | Paddle on water surface |
-| Swim (underwater) | A to stroke, stick to steer | Free 3D movement; limited air meter |
+| Swim (underwater) | A to stroke, stick to steer | Free 3D movement; health meter doubles as air meter |
+| Carry object | B near carriable object | Limits moveset: no punching/diving; slower movement. Press B to throw, Z to drop. |
+
+## Collision System
+
+### Collision Layers
+
+Bitmask-based layer system. Each collider has a category (what it is) and a mask (what it collides with). Collision only occurs when `A.mask & B.category` is nonzero. Layer assignments to be defined during implementation.
+
+### Collision Shapes
+
+- **Mario:** Vertical capsule (cylinder + hemisphere caps). Approximate dimensions: radius ~0.5 units, total height ~1.8 units standing, ~0.9 units crouching.
+- **Enemies:** Axis-aligned bounding boxes (AABB) or spheres depending on shape. Simple enemies (Goomba, Bob-omb) use spheres; tall/wide enemies (Whomp, Thwomp) use AABB.
+- **Level geometry:** Triangle mesh collision. Each triangle stores its surface type (normal, ice, lava, sand, etc.) and a surface normal for slope calculations.
+- **Triggers/collectibles:** Sphere triggers (coins, stars, hazard zones, warp points).
+
+### Ground Detection
+
+- Downward raycast from Mario's center, length slightly longer than step-up height.
+- Returns: ground hit (yes/no), ground normal, surface type, ground Y position.
+- **Step-up tolerance:** Mario can walk up small ledges (< ~0.3 units) without jumping. Raycast accounts for this.
+- **Snap-to-ground:** While grounded and not jumping, Mario snaps to the ground Y each frame to stay attached on downward slopes and moving platforms.
+- **Coyote time:** ~5 frames after walking off an edge, Mario can still jump as if grounded.
+
+### Wall Detection
+
+- Horizontal sphere/capsule sweep in Mario's movement direction each frame.
+- On wall contact: Mario slides along the wall surface (project velocity onto the wall plane).
+- Wall normals are stored for wall-jump eligibility checks (~45 degrees from vertical = wall-jumpable).
+- Prevents Mario from walking through geometry or into corners.
+
+### Ceiling Detection
+
+- Upward raycast from Mario's head position.
+- If ceiling is hit during a jump: Mario's vertical velocity is zeroed (head bonk), begins falling immediately.
+- Must also check when standing up from crouch in tight spaces.
+
+### Platform Types
+
+| Type | Behavior |
+|------|----------|
+| Static | Fixed geometry, standard collision |
+| Moving | Translates on a path; Mario inherits platform velocity while grounded on it |
+| Falling | Begins falling a short delay after Mario stands on it; respawns after a timer |
+| Tilting | Rotates based on Mario's position on it; tips Mario off if angled too far |
+| One-way | Passable from below, solid from above (used for some elevated platforms) |
+| Breakable | Destroyed by ground-pound; may reveal items or paths below |
 
 ## Physics
 
 ### Gravity and Momentum
 
-- Gravity is constant while airborne (no variable gravity zones in base game).
+- Gravity is a constant downward acceleration applied every frame while airborne: ~-38 units/s².
+- Terminal velocity caps falling speed: ~-75 units/s.
 - Mario preserves horizontal momentum into jumps. Faster run = longer jump arc.
-- Landing on slopes: Mario slides down steep slopes. Gentle slopes allow normal movement.
-- Ice surfaces: reduced friction, Mario slides and has delayed turning response.
+- Air control: Mario can steer horizontally while airborne but with reduced authority (~30% of ground acceleration).
+- Ground pound overrides horizontal velocity to zero and applies a faster fall speed (~2x gravity).
 
-### Knockback
+### Variable Jump Height
 
-- Taking damage knocks Mario backward with a fixed impulse.
-- Falling from great heights causes fall damage (takes 3 health) and brief stun.
-- Lava causes immediate knockback + 3 damage and launches Mario upward.
+- Pressing jump applies an initial upward velocity (varies by jump type, see table below).
+- Holding the jump button reduces effective gravity during the rising phase (~60% normal gravity), allowing higher jumps.
+- Releasing the jump button early restores full gravity immediately, cutting the jump short.
+- Double and triple jumps have fixed initial velocities that are progressively higher.
 
-### Water
+### Movement Parameters
 
-- Mario floats on the surface by default.
-- Diving underwater starts an air meter (8 segments, shared with health display or separate).
-- Air depletes over time; replenished by collecting coins or surfacing.
-- At zero air, health drains rapidly.
-- Metal Cap allows walking on the bottom with infinite air.
+All values are tuning targets — adjust during playtesting. Expressed relative to Mario's height (~1.8 units).
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Walk speed (max) | ~8 units/s | At ~50% stick deflection |
+| Run speed (max) | ~16 units/s | At full stick deflection |
+| Ground acceleration | ~24 units/s² | Time to full run: ~0.7s |
+| Ground deceleration | ~32 units/s² | Faster than acceleration (snappy stop) |
+| Ground friction (normal) | High | Mario stops quickly when stick released |
+| Ground friction (ice) | ~20% of normal | Long slide, delayed turning |
+| Air acceleration | ~7 units/s² | ~30% of ground |
+| Single jump velocity | ~22 units/s | ~2.5x Mario height at peak (button held) |
+| Double jump velocity | ~28 units/s | ~3.5x Mario height |
+| Triple jump velocity | ~33 units/s | ~4.5x Mario height; requires speed > 12 units/s |
+| Long jump velocity | ~15 vertical, ~32 horizontal | Low arc, long distance |
+| Backflip velocity | ~35 units/s | Highest vertical, minimal horizontal |
+| Wall jump velocity | ~22 vertical, ~16 horizontal | Away from wall |
+| Gravity | ~38 units/s² | |
+| Terminal velocity | ~75 units/s | |
+| Swim speed | ~10 units/s | Each A press gives a speed burst |
+
+### Slopes
+
+- Surface normal angle determines slope behavior:
+  - **< 30 degrees:** Normal movement. Mario can walk, run, and stand freely.
+  - **30–50 degrees:** Steep slope. Mario slides downhill if stationary or moving slowly. Can still run up if at sufficient speed.
+  - **> 50 degrees:** Wall-like. Treated as a wall for collision purposes; Mario cannot stand on it.
+- Sliding down a steep slope accelerates Mario in the downhill direction. Jumping while sliding is allowed.
+
+### Surface Types
+
+| Surface | Effect |
+|---------|--------|
+| Normal | Standard friction and behavior |
+| Ice | Greatly reduced friction; Mario slides, turning is sluggish |
+| Lava | Instant damage (3 segments) + upward knockback launch on contact |
+| Quicksand (shallow) | Mario sinks slowly; reduced movement speed; jump to escape |
+| Quicksand (deep) | Mario sinks; instant death if fully submerged |
+| Wind zone | Constant horizontal force applied while Mario is in the area |
+
+### Knockback and Damage
+
+- Taking damage knocks Mario backward with a fixed impulse (~12 units/s).
+- Mario gets ~2 seconds of invincibility frames after taking damage (flashing visual). Cannot take further damage during this window.
+- Fall damage threshold: ~11 units of vertical distance (~6x Mario's height). Deals 3 segments and a brief stun on landing.
+- Falling into a void / bottomless pit = instant death (lose a life regardless of health).
+
+### Water Physics
+
+- Mario floats on the surface by default. A button paddles forward on the surface.
+- Diving underwater (Z on surface): free 3D movement. A button gives a speed burst in the facing direction. Stick controls pitch and yaw.
+- Gravity is greatly reduced underwater (~15% of normal).
+- The health meter doubles as an air meter while submerged. Wedges drain at ~1 segment per 4 seconds.
+- Air replenished by collecting coins underwater or surfacing.
+- At zero air/health: Mario drowns (lose a life).
+- Metal Cap: Mario sinks to the bottom and walks normally with infinite air, normal gravity.
+
+## Movement State Machine
+
+Mario's action state determines which moves are available and how physics are applied. Only one state is active at a time.
+
+```
+IDLE ──────── stick input ───────► WALKING/RUNNING
+  │                                    │
+  ├── A ──► SINGLE_JUMP                ├── A ──────────► SINGLE_JUMP
+  ├── Z ──► CROUCHING                  ├── Z + A ──────► LONG_JUMP
+  └── B ──► PUNCH_COMBO                ├── reverse + A ► SIDE_SOMERSAULT
+                                       └── Z ──────────► SLIDE_KICK (if B) / CROUCHING
+CROUCHING
+  ├── A ──► BACKFLIP
+  ├── stick ► CRAWLING
+  └── release Z ► IDLE
+
+SINGLE_JUMP
+  ├── land ► IDLE (or WALKING if stick held)
+  ├── land + A ► DOUBLE_JUMP
+  ├── Z ──► GROUND_POUND
+  ├── B (low speed) ► JUMP_KICK
+  ├── B (high speed) ► DIVE
+  ├── near wall + A ► WALL_JUMP
+  └── near ledge ► LEDGE_GRAB
+
+DOUBLE_JUMP
+  ├── land + A (if fast enough) ► TRIPLE_JUMP
+  └── (same airborne options as SINGLE_JUMP)
+
+TRIPLE_JUMP ── (same airborne options, no further chain)
+
+GROUND_POUND
+  └── land ► IDLE (brief stun frames)
+
+DIVE
+  └── land ► BELLY_SLIDE ── stick/A ► recover to IDLE
+
+LEDGE_GRAB
+  ├── A or stick up ► LEDGE_CLIMB ► IDLE (on top)
+  └── stick down or Z ► drop ► FREEFALL
+
+SWIMMING_SURFACE
+  ├── A ► paddle stroke
+  └── Z ► SWIMMING_UNDERWATER
+
+SWIMMING_UNDERWATER
+  ├── A ► swim burst
+  └── surface ► SWIMMING_SURFACE
+
+KNOCKBACK ── (timer) ──► IDLE (invincibility frames active)
+```
+
+Key rules:
+- **Jump buffering:** If A is pressed within ~4 frames before landing, the jump still registers on landing.
+- **Coyote time:** ~5 frames after walking off an edge, a jump input still triggers a grounded jump instead of no action.
+- **Combo timer:** The punch-punch-kick combo chain resets if B is not pressed within ~10 frames of the previous hit.
+- **State priority:** Damage/knockback overrides any other state. Ground pound cannot be canceled once started.
 
 ## Health and Lives
 
@@ -91,17 +249,23 @@ Mario's movement is analog — walking speed is proportional to stick deflection
 
 - Yellow coin: restores 1 segment.
 - Blue coin: restores 5 segments (worth 5 yellow coins).
-- Red coin: restores 2 segments.
-- Spinning Heart: restores health while Mario runs through it.
-- Entering water (surface): restores health over time.
+- Red coin: restores 2 segments (worth 2 yellow coins toward 100-coin star).
+- Spinning Heart: restores health continuously while Mario runs through it.
+- Entering/touching water surface: restores health gradually.
+
+### Coin Counter
+
+- Each course visit has a coin counter that starts at 0 and resets on exit.
+- Yellow coin = 1, Red coin = 2, Blue coin = 5.
+- Reaching 100 coins spawns a Power Star at Mario's location (one per course).
 
 ### Lives
 
 - Mario starts with 4 lives.
 - 1-Up mushrooms grant an extra life.
-- Collecting 100 coins in a course grants an extra life.
+- Collecting 100 coins in a course grants an extra life (in addition to the star).
 - Collecting 50 coins in a course grants an extra life.
-- Game Over at 0 lives — restart from title screen / last save.
+- Game Over at 0 lives — restart from file select screen.
 
 ## Camera System
 
@@ -120,9 +284,10 @@ Inspired by the original Lakitu camera, simplified for modern controls.
 
 - Central hub connecting all courses.
 - Three floors plus basement and courtyard.
-- Courses accessed by jumping into paintings (or equivalent portals).
+- Courses accessed by jumping into paintings (or equivalent portals). Entering a painting opens a star select screen showing the 6 mission names; selected star can affect object/enemy placement in the level.
 - Doors require star counts to open (1-star door, 3-star door, 8-star door, etc.).
-- Key locations unlock as player progresses (basement after first Bowser, upper floors later).
+- Key locations unlock as player progresses (basement key from Bowser 1, second floor key from Bowser 2).
+- Exiting a course: collecting a star warps Mario out, or use the pause menu "Exit Course" (lose no progress except unsaved coins).
 
 ### Main Courses (15)
 
@@ -171,11 +336,11 @@ Linear obstacle-course levels ending in a Bowser boss fight:
 |----------------|---------|
 | 1 | Whomp's Fortress door |
 | 3 | Jolly Roger Bay / Cool, Cool Mountain door |
-| 8 | Basement (after Bowser in the Dark World) |
-| 12 | Upper courses door |
-| 30 | Second floor (after Bowser in the Fire Sea) |
-| 50 | Third floor door |
-| 70 | Bowser in the Sky (endless stair bypass) |
+| 8 | Big star door to Bowser in the Dark World; defeating him yields the basement key |
+| 12 | Basement star door (access to later basement courses) |
+| 30 | Dire, Dire Docks door; Bowser in the Fire Sea accessible from there; defeating him yields the second floor key |
+| 50 | Third floor star door |
+| 70 | Bowser in the Sky (endless stairs bypass) |
 
 **Total: 120 Power Stars** (105 from main courses + 15 from secret courses/castle).
 
@@ -185,7 +350,7 @@ Activated by hitting colored cap blocks (must first press corresponding switch i
 
 | Cap | Color | Duration | Effect |
 |-----|-------|----------|--------|
-| Wing Cap | Red | 60 seconds | Triple jump or cannon launch enters flight mode. Stick controls pitch/yaw. |
+| Wing Cap | Red | 60 seconds | Triple jump or cannon launch enters flight mode. Stick up = dive (gain speed, lose altitude), stick down = climb (lose speed, gain altitude). Touching ground cancels flight. |
 | Metal Cap | Green | 20 seconds | Invulnerable, heavy. Walk underwater, immune to gas/wind. Cannot be grabbed by enemies. |
 | Vanish Cap | Blue | 20 seconds | Semi-transparent. Walk through certain walls, metal grates, and enemies. Still affected by gravity. |
 
@@ -200,13 +365,20 @@ Caps can be combined (e.g., Metal + Vanish in certain levels) for both effects s
 | Goomba | Walks a patrol route, charges Mario on sight | Jump on, punch, any attack. Drops yellow coin. |
 | Bob-omb | Walks, chases Mario, explodes after fuse | Grab from behind and throw; or wait for self-destruct. |
 | Koopa Troopa | Walks patrol, flees when Mario approaches | Any attack; leaves shell behind (rideable). Drops blue coin. |
-| Boo | Invisible when Mario faces it, approaches from behind | Ground pound or punch while facing away. |
+| Boo | Becomes transparent/intangible when Mario faces it; approaches when Mario's back is turned | Turn around and punch when close, or ground-pound. |
 | Bully | Charges at Mario to push him off platforms | Push back by attacking; knock into lava/off edge. No direct damage to Mario. |
 | Chain Chomp | Lunges at Mario while chained to post | Cannot be defeated normally; ground-pound post to free it (star reward). |
-| Piranha Plant | Sleeps, bites if Mario gets too close | Punch or jump on while awake; don't approach while sleeping (it stays asleep). |
+| Piranha Plant | Sleeps when Mario is very close/still; wakes and bites when Mario approaches from distance | Attack while awake; tiptoe past while asleep. |
 | Amp | Electric orb, orbits a fixed path | Cannot be defeated; avoid contact (electric damage). |
 | Thwomp | Slams down when Mario walks beneath | Cannot be defeated; time passage between slams. |
 | Whomp | Falls forward to crush Mario | Dodge the fall, ground-pound its back. |
+| Lakitu (enemy) | Flies overhead, drops Spinies at Mario | Jump on or punch; respawns. |
+| Mr. I | Giant eyeball, shoots projectiles | Run circles around it until it spins out and dies. |
+| Pokey | Cactus segments, walks toward Mario | Punch segments off; destroy head to defeat. |
+| Monty Mole | Pops out of ground, throws rocks | Jump on or punch. |
+| Fly Guy | Flying Shy Guy, may carry items | Jump on or punch; may drop coin or 1-Up. |
+| Unagi | Giant eel lurking in underwater tunnels | Cannot be defeated; grab the star on its tail. |
+| Heave-Ho | Wind-up machine, launches Mario on contact | Cannot be defeated; use its throw to reach high areas. |
 
 ### Bosses
 
@@ -215,7 +387,7 @@ Caps can be combined (e.g., Metal + Vanish in certain levels) for both effects s
 | King Bob-omb | Bob-omb Battlefield | Grab from behind, throw 3 times. Must throw on the summit. |
 | Whomp King | Whomp's Fortress | Dodge fall, ground-pound back. 3 hits. |
 | Big Bully | Lethal Lava Land | Push into lava with attacks. |
-| Big Boo | Big Boo's Haunt | Ground-pound 3 times (face away to make it approach). |
+| Big Boo | Big Boo's Haunt | Face away to lure it close, turn and punch. 3 hits. |
 | Eyerok | Shifting Sand Land | Punch the eye on each hand when exposed. |
 | Wiggler | Tiny-Huge Island | Jump on 3 times (gets angrier each time). |
 | Bowser | 3 Bowser stages | Grab tail, spin with stick rotation, throw into spiked bombs on arena edge. Requires 1/1/3 hits. Final fight: arena crumbles after 2 hits. |
@@ -224,7 +396,9 @@ Caps can be combined (e.g., Metal + Vanish in certain levels) for both effects s
 
 | Object | Interaction |
 |--------|-------------|
-| Yellow/Red/Blue coin | Walk through to collect |
+| Yellow coin | Walk through to collect (1 coin) |
+| Red coin | Walk through to collect (2 coins); 8 per course, collecting all 8 spawns a Power Star |
+| Blue coin | Walk through to collect (5 coins); often hidden or triggered by specific actions |
 | Coin ring (circle of coins) | Pass through center or collect individually |
 | 1-Up Mushroom | Chase and touch (moves away from Mario) |
 | Star | Walk into to collect; triggers exit from course |
@@ -238,6 +412,27 @@ Caps can be combined (e.g., Metal + Vanish in certain levels) for both effects s
 | Star Door | Requires star count to open |
 | Pole / Tree | Jump onto to grab; climb with stick; jump off with A |
 | Spinning Heart | Run through to restore health |
+| Koopa Shell | Ride like a surfboard after knocking off a Koopa; fast movement, damages enemies on contact |
+| Cap Block (red/green/blue) | Punch to activate; dispenses corresponding cap (only after switch pressed in secret stage) |
+| Teleport warp | Invisible spots in certain courses; standing on one warps to a paired location |
+
+## Menu Flow
+
+1. **Title Screen** — Press Start.
+2. **File Select** — Four save file slots. Choose a file to play or delete.
+3. **Star Select** — Shown when entering a course painting. Displays the 6 star mission names and which ones are already collected.
+4. **Pause Menu** — Resume or Exit Course. Shows star count and current course name.
+5. **Game Over** — Shown at 0 lives. Continue from file select or quit.
+6. **Ending** — Plays after defeating final Bowser. Collecting all 120 stars unlocks a bonus (rooftop meeting with Yoshi, extra lives).
+
+## Audio
+
+Simple sound design using raudio (already integrated):
+
+- **SFX:** Jump, coin collect, punch/kick, star collect, damage taken, ground pound, swimming, enemy defeat, boss hit, door open, menu select.
+- **Music:** Per-course background track, hub world theme, boss theme, Bowser fight theme, star collect jingle, game over, title screen, file select.
+- **Ambient:** Water splashing, lava bubbling, wind in outdoor courses.
+- **Voice clips (optional):** Mario's "Wahoo!", "Here we go!", damage grunts. Can be omitted for simplicity.
 
 ## Save System
 

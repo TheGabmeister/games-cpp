@@ -10,7 +10,9 @@
       "Bash(cmake -S . -B build -G \"Visual Studio 18 2026\" -A x64 -Wno-dev)",
       "Bash(cmake -B build)",
       "Bash(cmake --build build --config Debug)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(curl -s \"https://www.mariowiki.com/Super_Mario_64\")",
+      "Bash(curl -s \"https://ukikipedia.net/wiki/Movement\")"
     ]
   }
 }

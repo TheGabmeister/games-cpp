@@ -95,7 +95,7 @@ bool gameLogic(float deltaTime, platform::Input &input)
 
 	ImGui::Text("Test");
 
-	ImGui::EndChildFrame();
+	ImGui::EndChild();
 
 
 	ImGui::PopMakeWindowNotTransparent();

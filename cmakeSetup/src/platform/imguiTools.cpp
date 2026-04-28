@@ -105,7 +105,7 @@ bool ImGui::BeginChildFrameColoured(ImGuiID id, glm::vec4 color, const ImVec2 &s
 	::ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, style.FrameRounding);
 	::ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, style.FrameBorderSize);
 	::ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, style.FramePadding);
-	bool ret = ::ImGui::BeginChild(id, size, true, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_AlwaysUseWindowPadding | extra_flags);
+	bool ret = ::ImGui::BeginChild(id, size, true, ImGuiWindowFlags_NoMove | extra_flags);
 	::ImGui::PopStyleVar(3);
 	::ImGui::PopStyleColor();
 	return ret;

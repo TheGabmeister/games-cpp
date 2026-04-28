@@ -39,9 +39,18 @@ New gameplay code goes in the game layer. The platform layer owns the main loop 
 - `PRODUCTION_BUILD` / `DEVELOPLEMT_BUILD` (note: typo is intentional, kept for compatibility) — set automatically based on Debug/Release config. Controls debug console allocation on Windows and assert behavior.
 - `REMOVE_IMGUI` — defined in `platformTools.h` and `glfwMain.cpp`. Set to `1` to strip ImGui entirely.
 
+## ImGui
+
+Uses Dear ImGui v1.92.7-docking. The `thirdparty/imgui-docking/` directory also contains extra addon headers used by the project: `imguiThemes.h`, `IconsForkAwesome.h`, `imfilebrowser.h`, and `multiPlot.h`/`multiPlot.cpp`. When upgrading ImGui, watch for API breaking changes — this project has already been migrated from older signatures (e.g. `DockSpaceOverViewport`, `EndChildFrame`, `ImGuiWindowFlags_AlwaysUseWindowPadding`).
+
 ## Conventions
 
 - Sources are auto-discovered via `GLOB_RECURSE` on `src/*.cpp` — no need to register new files in CMake.
 - All thirdparty dependencies live in `thirdparty/` with their own CMakeLists.txt and are linked statically.
 - ENet (networking) is included but commented out in CMakeLists.txt — uncomment both the `add_subdirectory` and the `target_link_libraries` line to enable it.
 - Save data uses raw struct serialization via `platform::readEntireFile` / `platform::writeEntireFile` into the resources directory.
+
+## Known Benign Warnings
+
+- `APIENTRY` macro redefinition (glad vs Windows SDK) — harmless, can be ignored.
+- CMP0115 policy warnings from `stb_image` and `stb_truetype` — these are upstream CMake dev warnings, not build issues.

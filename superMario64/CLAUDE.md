@@ -54,3 +54,21 @@ Uses Dear ImGui v1.92.7-docking. The `thirdparty/imgui-docking/` directory also 
 
 - `APIENTRY` macro redefinition (glad vs Windows SDK) — harmless, can be ignored.
 - CMP0115 policy warnings from `stb_image` and `stb_truetype` — these are upstream CMake dev warnings, not build issues.
+
+
+## Coding Principles
+
+- **C++ game programming best practices**
+- **KISS** — simplest thing that works. No clever patterns where a plain `if` does the job. But a plain `if` that must be copy-pasted into every new feature is not simple — it's a maintenance trap.
+- **YAGNI** — don't build for hypothetical needs. No abstraction layers "for later."
+- **DRY** — remove real duplication, not shape-similar code. Wrong abstraction costs more than repetition.
+- **Locality of change** — adding a new entity, tile, or feature should require changes in as few files as possible. Prefer data-driven dispatch (flags, vtables) over centralized type switches when the set of types is expected to grow. If a new enemy requires editing the orchestrator, the abstraction is missing.
+
+When in doubt: for code one person owns and rarely changes, lean KISS. For interfaces many contributors touch, lean locality of change.
+
+## Asset Pipeline
+
+- **Sprites**: spritesheets drawn as single SVGs with all frames on a 64px grid, exported as one PNG via Inkscape (`"C:/Program Files/Inkscape/bin/inkscape.exe" player.svg -o player.png -w 256 -h 256` for a 4x4 sheet). One sheet per category (player, enemy type, tiles, items, etc.). Code indexes frames by row/column source rectangle. Store SVG and PNG in `resources/sprites/`.
+- **Sounds**: generate with rfxgen (`"D:/rfxgen_v5.0_win_x64/rfxgen.exe" -g coin -o sound.wav`). Presets: coin, laser, explosion, powerup, hit, jump, blip. Store WAV in `resources/`.
+- **Music**: OGG files in `resources/music/`. Loaded via `LoadMusicStream`, updated every frame. Composition pipeline: Python scripts in `tools/music/` use `midiutil` to generate MIDI → FluidSynth renders with a soundfont to WAV → ffmpeg converts to OGG. 
+- **3D models + animations** | Blender 5.1 Python | `"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python <script>.py` |

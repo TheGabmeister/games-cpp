@@ -30,7 +30,6 @@ add_subdirectory(thirdparty/glfw)			#window oppener
 add_subdirectory(thirdparty/glad)				#opengl loader
 add_subdirectory(thirdparty/stb_image)			#loading immaged
 add_subdirectory(thirdparty/stb_truetype)		#loading ttf files
-#add_subdirectory(thirdparty/enet-1.3.17)		#networking
 add_subdirectory(thirdparty/raudio)				#audio
 add_subdirectory(thirdparty/glm)				#math
 add_subdirectory(thirdparty/imgui-docking)		#ui
@@ -72,7 +71,7 @@ target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES} )
 if(MSVC) # If using the VS compiler...
 
 	target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC _CRT_SECURE_NO_WARNINGS)
-	target_compile_options("${CMAKE_PROJECT_NAME}" PRIVATE /wd4005)
+	target_compile_options("${CMAKE_PROJECT_NAME}" PRIVATE /wd4005) # suppress APIENTRY macro redefinition warning (glad/GLFW vs Windows SDK)
 
 	set_target_properties("${CMAKE_PROJECT_NAME}" PROPERTIES LINK_FLAGS "/SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup") #no console
 	
@@ -90,12 +89,6 @@ endif()
 target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/gameLayer/")
 target_include_directories("${CMAKE_PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/platform/")
-
-
-#ADD enet version! also don't forget to uncomment enet from above
-#target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw 
-#	glad stb_image stb_truetype gl2d raudio imgui safeSave profilerLib enet glui)
-
 
 target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE glm glfw 
 	glad stb_image stb_truetype gl2d raudio imgui safeSave glui)

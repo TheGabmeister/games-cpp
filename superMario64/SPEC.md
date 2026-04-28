@@ -39,6 +39,101 @@ Each frame renders in this order:
 - Objects outside the camera frustum are skipped. Simple sphere-based check per object (bounding sphere vs. 6 frustum planes).
 - Level geometry can be split into chunks/sectors for coarser culling on larger courses.
 
+## 3D Models and Art Assets
+
+All models are simple low-poly meshes. No high-detail sculpts — aim for N64-era polygon counts or lower. Flat/vertex coloring is fine; basic textures optional. Models loaded from OBJ or a custom format.
+
+### Characters
+
+| Model | Animations | Notes |
+|-------|-----------|-------|
+| Mario | Idle, walk, run, jump (single/double/triple), fall, land, crouch, crawl, punch (x3 combo), kick, dive, belly slide, ground pound (flip + slam), wall jump, ledge grab, ledge climb, swim (surface), swim (underwater), carry object, throw, slide kick, backflip, side somersault, hurt/knockback, death, pole climb, star collect celebration | ~2000-4000 polys. Needs distinct silhouette at all distances. |
+| Bowser | Idle, walk, charge, fire breath, ground pound, stunned, grabbed (tail), spinning, thrown, defeated | ~3000-5000 polys. Three fights use the same model. |
+| Peach | Idle, talking | Only appears in intro and ending cutscenes. ~1500-2500 polys. |
+| Toad | Idle, talking | NPC in castle hub. ~800-1200 polys. Recolor for different Toads. |
+
+### Enemies
+
+| Model | Animations | Notes |
+|-------|-----------|-------|
+| Goomba | Walk, charge, squished/defeated | ~300-500 polys. Most common enemy. |
+| Bob-omb | Walk, chase, fuse burning, explode | ~300-500 polys. Black variant (hostile) and pink variant (friendly NPC). |
+| Koopa Troopa | Walk, shell-less (running in boxers), defeated | ~500-800 polys. Shell is a separate model. |
+| Boo | Idle (facing Mario, transparent), approach (behind Mario), defeated | ~300-500 polys. Needs transparency support. Big Boo is same model scaled up. |
+| Bully | Idle, charge, pushed back, falling into lava | ~400-600 polys. Big Bully is same model scaled up. |
+| Chain Chomp | Idle (lunging on chain), freed (bouncing away) | ~500-800 polys. Chain links as separate small meshes. |
+| Piranha Plant | Sleeping (retracted), awake (biting) | ~400-600 polys. Sits in a pipe. |
+| Thwomp | Idle (floating), slam down, rising back up | ~200-400 polys. Cube with a face and cracks. |
+| Whomp | Walk, fall forward, stunned (face-down) | ~400-600 polys. Whomp King is same model scaled up. |
+| Amp | Spinning | ~200-300 polys. Sphere with sparks (particle effect). |
+| Lakitu (enemy) | Flying, throwing Spiny | ~500-800 polys. On a cloud (separate mesh). |
+| Spiny | Walk | ~200-400 polys. Dropped by Lakitu. |
+| Mr. I | Idle, spinning, defeated | ~200-300 polys. Sphere with an eyeball texture. |
+| Pokey | Idle, walk | ~300-500 polys. Stack of spheres + head. |
+| Monty Mole | Pop up, throw rock, defeated | ~300-500 polys. |
+| Fly Guy | Flying, carrying item | ~400-600 polys. Propeller animated. |
+| Unagi | Idle (lurking in tunnel), swimming | ~600-1000 polys. Long eel shape. |
+| Heave-Ho | Idle, winding up, launching | ~400-600 polys. |
+| King Bob-omb | Idle, grabbed, thrown, defeated | ~800-1200 polys. Bob-omb with crown and mustache. |
+| Eyerok | Hands idle, hands attacking, eye exposed | ~600-1000 polys per hand. Two stone hands. |
+| Wiggler | Walk, angry walk, defeated | ~600-1000 polys. Caterpillar segments. |
+| Dorrie | Swimming, Mario riding | ~800-1200 polys. Plesiosaur shape. |
+
+### Objects and Collectibles
+
+| Model | Notes |
+|-------|-------|
+| Yellow Coin | ~50-100 polys. Spinning disc with thickness. Can also be a billboard sprite. |
+| Red Coin | Same as yellow coin, red tint. |
+| Blue Coin | Same as yellow coin, blue tint. |
+| Power Star | ~200-400 polys. Star shape, spinning and glowing (particle effect or emissive). |
+| 1-Up Mushroom | ~150-300 polys. Green mushroom. |
+| Koopa Shell | ~200-400 polys. Used for riding and thrown by Koopa defeat. |
+| Breakable Box | ~50-100 polys. Wood texture or vertex color. Break into 4-6 fragment pieces. |
+| Metal Box | ~50-100 polys. Metallic color. |
+| Cap Block (red) | ~50-100 polys. Exclamation mark on face. Red color. |
+| Cap Block (green) | Same as above, green. |
+| Cap Block (blue) | Same as above, blue. |
+| Wing Cap | ~100-200 polys. Wings attached to a cap shape. Attaches to Mario's head. |
+| Metal Cap | ~80-150 polys. Cap shape, metallic shader/color. |
+| Vanish Cap | ~80-150 polys. Cap shape, blue transparent. |
+| Cannon | ~150-300 polys. Cylindrical barrel in a hole. |
+| Sign | ~50-100 polys. Wooden post with flat board. |
+| Door (regular) | ~100-200 polys. Rectangular door in a frame. |
+| Star Door | ~200-400 polys. Large ornate door with star emblem. |
+| Key | ~100-200 polys. Shown after Bowser fights. |
+| Spinning Heart | ~100-200 polys. Heart shape, spinning on a vertical axis. |
+| Spiked Bomb | ~200-400 polys. Sphere with spikes. Used in Bowser arena. |
+| Tree | ~200-500 polys. Trunk cylinder + leaf canopy. Climbable. |
+| Pole | ~30-60 polys. Thin cylinder. Climbable. |
+| Warp Pipe | ~100-200 polys. Green cylinder with lip. |
+
+### Level Geometry
+
+Each course needs a visual mesh and collision mesh (see Level Data Format). No per-course model list here — level geometry is authored per course. General building blocks:
+
+| Prop | Notes |
+|------|-------|
+| Flat ground plane | Textured or vertex-colored. |
+| Ramp / slope | Angled surface for slope physics. |
+| Stairs | Stepped geometry. |
+| Walls / cliffs | Vertical surfaces. |
+| Floating platform | Cube or disc, may be static/moving/falling. |
+| Bridge | Narrow walkway, may collapse. |
+| Water plane | Flat transparent quad at water surface height. |
+| Lava plane | Flat emissive quad with animated UVs or vertex color. |
+| Skybox | Cube or sphere with per-course sky texture/color. |
+| Painting frame | Rectangular frame with course painting texture. Portal trigger. |
+| Castle structure | Hub world geometry — walls, floors, roofs, towers. Largest single mesh. |
+
+### Art Style Guidelines
+
+- No strict polygon budget — modern hardware handles this fine. Aim for clean, readable geometry rather than counting tris.
+- Bright, saturated colors. Mario's red/blue should pop against any background.
+- Enemies should be instantly readable by silhouette — distinct shapes, not just recolors.
+- Animations prioritize clarity over smoothness. Snappy keyframes (8-15 frames per animation) are fine.
+- Consistent scale: Mario is ~1.8 units tall. All other models sized relative to that.
+
 ## Input
 
 Supports keyboard + mouse and gamepad. GLFW handles both natively.

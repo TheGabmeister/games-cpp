@@ -7,7 +7,9 @@
       "Bash(cmake --build build --config Release)",
       "Bash(cmake -S . -B build)",
       "Bash(cmake -B build -G \"Visual Studio 18 2026\" -A x64 -Wno-dev)",
-      "Bash(cmake -S . -B build -G \"Visual Studio 18 2026\" -A x64 -Wno-dev)"
+      "Bash(cmake -S . -B build -G \"Visual Studio 18 2026\" -A x64 -Wno-dev)",
+      "Bash(rm -f imgui_impl_allegro5.cpp imgui_impl_allegro5.h imgui_impl_android.cpp imgui_impl_android.h imgui_impl_dx9.cpp imgui_impl_dx9.h imgui_impl_dx10.cpp imgui_impl_dx10.h imgui_impl_dx11.cpp imgui_impl_dx11.h imgui_impl_dx12.cpp imgui_impl_dx12.h imgui_impl_glut.cpp imgui_impl_glut.h imgui_impl_metal.h imgui_impl_metal.mm imgui_impl_null.cpp imgui_impl_null.h imgui_impl_opengl2.cpp imgui_impl_opengl2.h imgui_impl_osx.h imgui_impl_osx.mm imgui_impl_sdl2.cpp imgui_impl_sdl2.h imgui_impl_sdl3.cpp imgui_impl_sdl3.h imgui_impl_sdlgpu3.cpp imgui_impl_sdlgpu3.h imgui_impl_sdlgpu3_shaders.h imgui_impl_sdlrenderer2.cpp imgui_impl_sdlrenderer2.h imgui_impl_sdlrenderer3.cpp imgui_impl_sdlrenderer3.h imgui_impl_vulkan.cpp imgui_impl_vulkan.h imgui_impl_wgpu.cpp imgui_impl_wgpu.h imgui_impl_win32.cpp imgui_impl_win32.h)",
+      "Bash(rm -rf sdlgpu3 vulkan)"
     ]
   }
 }

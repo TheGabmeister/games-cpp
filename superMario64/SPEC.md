@@ -2,46 +2,15 @@
 
 A simplified recreation of Super Mario 64 focused on core gameplay mechanics with simple 3D graphics. Not a pixel-perfect clone — the goal is to capture the feel and fun of the original through faithful movement, physics, and level design principles.
 
-## Rendering Approach
+---
 
-- **Resolution:** 1200x900 (4:3 aspect ratio). Windowed by default.
-- **3D world:** Direct OpenGL 3.3 Core for the game world. Levels built from basic geometry (cubes, ramps, cylinders). Characters and enemies are simple meshes or billboarded sprites. No complex texturing or lighting required — flat/vertex colors and basic diffuse shading are sufficient.
-- **2D overlays:** gl2d + glui for all HUD elements (health meter, coin counter, star count, lives) and game menus (title screen, file select, star select, pause menu).
+# Technical Foundation
 
-## Rendering Pipeline
 
-### 3D Pipeline (OpenGL 3.3 Core)
-
-Each frame renders in this order:
-
-1. **Clear** — Clear color buffer (sky color or skybox) and depth buffer.
-2. **Skybox** — Render a simple skybox or gradient background (fullscreen quad, depth disabled). Per-course sky color/texture.
-3. **Opaque geometry** — Render all level geometry and solid objects with depth testing enabled. Uses a basic shader: vertex position, normal, color (or simple texture). Lighting: single directional light + ambient. No shadows required initially.
-4. **Characters and enemies** — Render Mario, enemies, NPCs. Either simple 3D meshes or billboarded sprites that always face the camera. Animated via sprite sheets (billboards) or simple skeletal/vertex animation (meshes).
-5. **Transparent geometry** — Render water surfaces, glass, Vanish Cap Mario with alpha blending. Draw back-to-front or use a simple depth-peel approach. Coins and particle effects also go here.
-6. **Particles** — Coin sparkles, dust on landing, splash effects, fire, star effects. Billboarded quads with alpha.
-7. **2D overlay** — Switch to orthographic projection. gl2d + glui render the HUD and any active menu on top of the 3D scene. Depth testing disabled.
-
-### View and Projection
-
-- **Projection:** Perspective matrix — FOV ~45 degrees, near plane 0.1, far plane 500.
-- **View:** Computed from camera position and target point (see Camera System). glm::lookAt.
-- **Model:** Each object has a model matrix (position, rotation, scale). Sent as a uniform to the shader.
-
-### Mesh Loading
-
-- Level geometry and character meshes loaded from OBJ files (or a simpler custom format). Parsed at load time into vertex buffer objects (VBOs) with position, normal, and UV/color attributes.
-- Levels are static meshes — loaded once per course, drawn each frame.
-- Animated characters: either swap between pre-made meshes per frame (sprite-sheet style) or use simple bone-based animation with a vertex shader.
-
-### Frustum Culling
-
-- Objects outside the camera frustum are skipped. Simple sphere-based check per object (bounding sphere vs. 6 frustum planes).
-- Level geometry can be split into chunks/sectors for coarser culling on larger courses.
 
 ## 3D Models and Art Assets
 
-All models are simple low-poly meshes. No high-detail sculpts — aim for N64-era polygon counts or lower. Flat/vertex coloring is fine; basic textures optional. Models loaded from OBJ or a custom format.
+All models are clean low-poly meshes with flat/vertex coloring or basic textures. See IMPLEMENTATION.md for file format and loading details.
 
 ### Characters
 
@@ -57,9 +26,9 @@ All models are simple low-poly meshes. No high-detail sculpts — aim for N64-er
 | Model | Animations | Notes |
 |-------|-----------|-------|
 | Goomba | Walk, charge, squished/defeated | ~300-500 polys. Most common enemy. |
-| Bob-omb | Walk, chase, fuse burning, explode | ~300-500 polys. Black variant (hostile) and pink variant (friendly NPC). |
+| Bob-omb | Walk, chase, fuse burning, explode | ~300-500 polys. Black (hostile) and pink (friendly NPC) variants. |
 | Koopa Troopa | Walk, shell-less (running in boxers), defeated | ~500-800 polys. Shell is a separate model. |
-| Boo | Idle (facing Mario, transparent), approach (behind Mario), defeated | ~300-500 polys. Needs transparency support. Big Boo is same model scaled up. |
+| Boo | Idle (transparent), approach, defeated | ~300-500 polys. Needs transparency support. Big Boo is same model scaled up. |
 | Bully | Idle, charge, pushed back, falling into lava | ~400-600 polys. Big Bully is same model scaled up. |
 | Chain Chomp | Idle (lunging on chain), freed (bouncing away) | ~500-800 polys. Chain links as separate small meshes. |
 | Piranha Plant | Sleeping (retracted), awake (biting) | ~400-600 polys. Sits in a pipe. |
@@ -84,16 +53,14 @@ All models are simple low-poly meshes. No high-detail sculpts — aim for N64-er
 | Model | Notes |
 |-------|-------|
 | Yellow Coin | ~50-100 polys. Spinning disc with thickness. Can also be a billboard sprite. |
-| Red Coin | Same as yellow coin, red tint. |
-| Blue Coin | Same as yellow coin, blue tint. |
+| Red Coin | Same mesh as yellow coin, red tint. |
+| Blue Coin | Same mesh as yellow coin, blue tint. |
 | Power Star | ~200-400 polys. Star shape, spinning and glowing (particle effect or emissive). |
 | 1-Up Mushroom | ~150-300 polys. Green mushroom. |
-| Koopa Shell | ~200-400 polys. Used for riding and thrown by Koopa defeat. |
+| Koopa Shell | ~200-400 polys. Used for riding and dropped by Koopa defeat. |
 | Breakable Box | ~50-100 polys. Wood texture or vertex color. Break into 4-6 fragment pieces. |
 | Metal Box | ~50-100 polys. Metallic color. |
-| Cap Block (red) | ~50-100 polys. Exclamation mark on face. Red color. |
-| Cap Block (green) | Same as above, green. |
-| Cap Block (blue) | Same as above, blue. |
+| Cap Block (red/green/blue) | ~50-100 polys. Exclamation mark on face. Color per cap type. |
 | Wing Cap | ~100-200 polys. Wings attached to a cap shape. Attaches to Mario's head. |
 | Metal Cap | ~80-150 polys. Cap shape, metallic shader/color. |
 | Vanish Cap | ~80-150 polys. Cap shape, blue transparent. |
@@ -110,7 +77,7 @@ All models are simple low-poly meshes. No high-detail sculpts — aim for N64-er
 
 ### Level Geometry
 
-Each course needs a visual mesh and collision mesh (see Level Data Format). No per-course model list here — level geometry is authored per course. General building blocks:
+Each course needs a visual mesh and a collision mesh (see Level Data Format). General building blocks:
 
 | Prop | Notes |
 |------|-------|
@@ -128,7 +95,7 @@ Each course needs a visual mesh and collision mesh (see Level Data Format). No p
 
 ### Art Style Guidelines
 
-- No strict polygon budget — modern hardware handles this fine. Aim for clean, readable geometry rather than counting tris.
+- No strict polygon budget — modern hardware handles this fine. Aim for clean, readable geometry.
 - Bright, saturated colors. Mario's red/blue should pop against any background.
 - Enemies should be instantly readable by silhouette — distinct shapes, not just recolors.
 - Animations prioritize clarity over smoothness. Snappy keyframes (8-15 frames per animation) are fine.
@@ -141,6 +108,10 @@ Supports keyboard + mouse and gamepad. GLFW handles both natively.
 - **Gamepad:** Left stick for movement (analog), right stick for camera, face buttons for actions. Analog stick deflection controls walk/run speed.
 - **Keyboard:** WASD for movement (digital — walk/run toggle or always run), mouse for camera. Movement is 8-directional; no analog speed control.
 - Input is abstracted into game actions (move, jump, attack, crouch, camera) so all gameplay code is input-method-agnostic. Bindings are remappable.
+
+---
+
+# Player Mechanics
 
 ## Core Movement
 
@@ -188,127 +159,6 @@ Mario's movement is analog — walking speed is proportional to stick deflection
 | Swim (surface) | A to stroke | Paddle on water surface |
 | Swim (underwater) | A to stroke, stick to steer | Free 3D movement; health meter doubles as air meter |
 | Carry object | B near carriable object | Limits moveset: no punching/diving; slower movement. Press B to throw, Z to drop. |
-
-## Collision System
-
-### Collision Layers
-
-Bitmask-based layer system. Each collider has a category (what it is) and a mask (what it collides with). Collision only occurs when `A.mask & B.category` is nonzero. Layer assignments to be defined during implementation.
-
-### Collision Shapes
-
-- **Mario:** Vertical capsule (cylinder + hemisphere caps). Approximate dimensions: radius ~0.5 units, total height ~1.8 units standing, ~0.9 units crouching.
-- **Enemies:** Axis-aligned bounding boxes (AABB) or spheres depending on shape. Simple enemies (Goomba, Bob-omb) use spheres; tall/wide enemies (Whomp, Thwomp) use AABB.
-- **Level geometry:** Triangle mesh collision. Each triangle stores its surface type (normal, ice, lava, sand, etc.) and a surface normal for slope calculations.
-- **Triggers/collectibles:** Sphere triggers (coins, stars, hazard zones, warp points).
-
-### Ground Detection
-
-- Downward raycast from Mario's center, length slightly longer than step-up height.
-- Returns: ground hit (yes/no), ground normal, surface type, ground Y position.
-- **Step-up tolerance:** Mario can walk up small ledges (< ~0.3 units) without jumping. Raycast accounts for this.
-- **Snap-to-ground:** While grounded and not jumping, Mario snaps to the ground Y each frame to stay attached on downward slopes and moving platforms.
-- **Coyote time:** ~5 frames after walking off an edge, Mario can still jump as if grounded.
-
-### Wall Detection
-
-- Horizontal sphere/capsule sweep in Mario's movement direction each frame.
-- On wall contact: Mario slides along the wall surface (project velocity onto the wall plane).
-- Wall normals are stored for wall-jump eligibility checks (~45 degrees from vertical = wall-jumpable).
-- Prevents Mario from walking through geometry or into corners.
-
-### Ceiling Detection
-
-- Upward raycast from Mario's head position.
-- If ceiling is hit during a jump: Mario's vertical velocity is zeroed (head bonk), begins falling immediately.
-- Must also check when standing up from crouch in tight spaces.
-
-### Platform Types
-
-| Type | Behavior |
-|------|----------|
-| Static | Fixed geometry, standard collision |
-| Moving | Translates on a path; Mario inherits platform velocity while grounded on it |
-| Falling | Begins falling a short delay after Mario stands on it; respawns after a timer |
-| Tilting | Rotates based on Mario's position on it; tips Mario off if angled too far |
-| One-way | Passable from below, solid from above (used for some elevated platforms) |
-| Breakable | Destroyed by ground-pound; may reveal items or paths below |
-
-## Physics
-
-### Gravity and Momentum
-
-- Gravity is a constant downward acceleration applied every frame while airborne: ~-38 units/s².
-- Terminal velocity caps falling speed: ~-75 units/s.
-- Mario preserves horizontal momentum into jumps. Faster run = longer jump arc.
-- Air control: Mario can steer horizontally while airborne but with reduced authority (~30% of ground acceleration).
-- Ground pound overrides horizontal velocity to zero and applies a faster fall speed (~2x gravity).
-
-### Variable Jump Height
-
-- Pressing jump applies an initial upward velocity (varies by jump type, see table below).
-- Holding the jump button reduces effective gravity during the rising phase (~60% normal gravity), allowing higher jumps.
-- Releasing the jump button early restores full gravity immediately, cutting the jump short.
-- Double and triple jumps have fixed initial velocities that are progressively higher.
-
-### Movement Parameters
-
-All values are tuning targets — adjust during playtesting. Expressed relative to Mario's height (~1.8 units).
-
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| Walk speed (max) | ~8 units/s | At ~50% stick deflection |
-| Run speed (max) | ~16 units/s | At full stick deflection |
-| Ground acceleration | ~24 units/s² | Time to full run: ~0.7s |
-| Ground deceleration | ~32 units/s² | Faster than acceleration (snappy stop) |
-| Ground friction (normal) | High | Mario stops quickly when stick released |
-| Ground friction (ice) | ~20% of normal | Long slide, delayed turning |
-| Air acceleration | ~7 units/s² | ~30% of ground |
-| Single jump velocity | ~22 units/s | ~2.5x Mario height at peak (button held) |
-| Double jump velocity | ~28 units/s | ~3.5x Mario height |
-| Triple jump velocity | ~33 units/s | ~4.5x Mario height; requires speed > 12 units/s |
-| Long jump velocity | ~15 vertical, ~32 horizontal | Low arc, long distance |
-| Backflip velocity | ~35 units/s | Highest vertical, minimal horizontal |
-| Wall jump velocity | ~22 vertical, ~16 horizontal | Away from wall |
-| Gravity | ~38 units/s² | |
-| Terminal velocity | ~75 units/s | |
-| Swim speed | ~10 units/s | Each A press gives a speed burst |
-
-### Slopes
-
-- Surface normal angle determines slope behavior:
-  - **< 30 degrees:** Normal movement. Mario can walk, run, and stand freely.
-  - **30–50 degrees:** Steep slope. Mario slides downhill if stationary or moving slowly. Can still run up if at sufficient speed.
-  - **> 50 degrees:** Wall-like. Treated as a wall for collision purposes; Mario cannot stand on it.
-- Sliding down a steep slope accelerates Mario in the downhill direction. Jumping while sliding is allowed.
-
-### Surface Types
-
-| Surface | Effect |
-|---------|--------|
-| Normal | Standard friction and behavior |
-| Ice | Greatly reduced friction; Mario slides, turning is sluggish |
-| Lava | Instant damage (3 segments) + upward knockback launch on contact |
-| Quicksand (shallow) | Mario sinks slowly; reduced movement speed; jump to escape |
-| Quicksand (deep) | Mario sinks; instant death if fully submerged |
-| Wind zone | Constant horizontal force applied while Mario is in the area |
-
-### Knockback and Damage
-
-- Taking damage knocks Mario backward with a fixed impulse (~12 units/s).
-- Mario gets ~2 seconds of invincibility frames after taking damage (flashing visual). Cannot take further damage during this window.
-- Fall damage threshold: ~11 units of vertical distance (~6x Mario's height). Deals 3 segments and a brief stun on landing.
-- Falling into a void / bottomless pit = instant death (lose a life regardless of health).
-
-### Water Physics
-
-- Mario floats on the surface by default. A button paddles forward on the surface.
-- Diving underwater (Z on surface): free 3D movement. A button gives a speed burst in the facing direction. Stick controls pitch and yaw.
-- Gravity is greatly reduced underwater (~15% of normal).
-- The health meter doubles as an air meter while submerged. Wedges drain at ~1 segment per 4 seconds.
-- Air replenished by collecting coins underwater or surfacing.
-- At zero air/health: Mario drowns (lose a life).
-- Metal Cap: Mario sinks to the bottom and walks normally with infinite air, normal gravity.
 
 ## Movement State Machine
 
@@ -368,6 +218,128 @@ Key rules:
 - **Combo timer:** The punch-punch-kick combo chain resets if B is not pressed within ~10 frames of the previous hit.
 - **State priority:** Damage/knockback overrides any other state. Ground pound cannot be canceled once started.
 
+## Collision System
+
+### Collision Layers
+
+Bitmask-based layer system. Each collider has a category (what it is) and a mask (what it collides with). Collision only occurs when `A.mask & B.category` is nonzero. Layer assignments to be defined during implementation.
+
+### Collision Shapes
+
+- **Mario:** Vertical capsule (cylinder + hemisphere caps). Approximate dimensions: radius ~0.5 units, total height ~1.8 units standing, ~0.9 units crouching.
+- **Enemies:** Axis-aligned bounding boxes (AABB) or spheres depending on shape. Simple enemies (Goomba, Bob-omb) use spheres; tall/wide enemies (Whomp, Thwomp) use AABB.
+- **Level geometry:** Triangle mesh collision. Each triangle stores its surface type (see Surface Types under Physics), collision layer bits, and a pre-computed surface normal.
+- **Triggers/collectibles:** Sphere triggers (coins, stars, hazard zones, warp points).
+
+### Ground Detection
+
+- Downward raycast from Mario's center, length slightly longer than step-up height.
+- Returns: ground hit (yes/no), ground normal, surface type, ground Y position.
+- **Step-up tolerance:** Mario can walk up small ledges (< ~0.3 units) without jumping.
+- **Snap-to-ground:** While grounded and not jumping, Mario snaps to the ground Y each frame to stay attached on downward slopes and moving platforms.
+
+### Wall Detection
+
+- Horizontal sphere/capsule sweep in Mario's movement direction each frame.
+- On wall contact: Mario slides along the wall surface (project velocity onto the wall plane).
+- Wall normals are stored for wall-jump eligibility checks.
+- Prevents Mario from walking through geometry or into corners.
+
+### Ceiling Detection
+
+- Upward raycast from Mario's head position.
+- If ceiling is hit during a jump: Mario's vertical velocity is zeroed (head bonk), begins falling immediately.
+- Must also check when standing up from crouch in tight spaces.
+
+### Platform Types
+
+| Type | Behavior |
+|------|----------|
+| Static | Fixed geometry, standard collision |
+| Moving | Translates on a path; Mario inherits platform velocity while grounded on it |
+| Falling | Begins falling a short delay after Mario stands on it; respawns after a timer |
+| Tilting | Rotates based on Mario's position on it; tips Mario off if angled too far |
+| One-way | Passable from below, solid from above (used for some elevated platforms) |
+| Breakable | Destroyed by ground-pound; may reveal items or paths below |
+
+## Physics
+
+### Gravity and Momentum
+
+- Gravity is a constant downward acceleration applied every frame while airborne: ~-38 units/s².
+- Terminal velocity caps falling speed: ~-75 units/s.
+- Mario preserves horizontal momentum into jumps. Faster run = longer jump arc.
+- Air control: Mario can steer horizontally while airborne but with reduced authority (~30% of ground acceleration).
+- Ground pound overrides horizontal velocity to zero and applies a faster fall speed (~2x gravity).
+
+### Variable Jump Height
+
+- Pressing jump applies an initial upward velocity (varies by jump type, see parameters table).
+- Holding the jump button reduces effective gravity during the rising phase (~60% normal gravity), allowing higher jumps.
+- Releasing the jump button early restores full gravity immediately, cutting the jump short.
+- Double and triple jumps have fixed initial velocities that are progressively higher.
+
+### Movement Parameters
+
+All values are tuning targets — adjust during playtesting. Expressed relative to Mario's height (~1.8 units).
+
+| Parameter | Value | Notes |
+|-----------|-------|-------|
+| Walk speed (max) | ~8 units/s | At ~50% stick deflection |
+| Run speed (max) | ~16 units/s | At full stick deflection |
+| Ground acceleration | ~24 units/s² | Time to full run: ~0.7s |
+| Ground deceleration | ~32 units/s² | Faster than acceleration (snappy stop) |
+| Ground friction (normal) | High | Mario stops quickly when stick released |
+| Ground friction (ice) | ~20% of normal | Long slide, delayed turning |
+| Air acceleration | ~7 units/s² | ~30% of ground |
+| Single jump velocity | ~22 units/s | ~2.5x Mario height at peak (button held) |
+| Double jump velocity | ~28 units/s | ~3.5x Mario height |
+| Triple jump velocity | ~33 units/s | ~4.5x Mario height; requires speed > 12 units/s |
+| Long jump velocity | ~15 vertical, ~32 horizontal | Low arc, long distance |
+| Backflip velocity | ~35 units/s | Highest vertical, minimal horizontal |
+| Wall jump velocity | ~22 vertical, ~16 horizontal | Away from wall |
+| Gravity | ~38 units/s² | |
+| Terminal velocity | ~75 units/s | |
+| Swim speed | ~10 units/s | Each A press gives a speed burst |
+
+### Slopes
+
+- Surface normal angle determines slope behavior:
+  - **< 30 degrees:** Normal movement. Mario can walk, run, and stand freely.
+  - **30–50 degrees:** Steep slope. Mario slides downhill if stationary or moving slowly. Can still run up if at sufficient speed.
+  - **> 50 degrees:** Wall-like. Treated as a wall for collision purposes; Mario cannot stand on it.
+- Sliding down a steep slope accelerates Mario in the downhill direction. Jumping while sliding is allowed.
+
+### Surface Types
+
+Each collision triangle is tagged with a surface type that affects physics:
+
+| Surface | Effect |
+|---------|--------|
+| Normal | Standard friction and behavior |
+| Ice | Greatly reduced friction (~20% of normal); Mario slides, turning is sluggish |
+| Lava | Instant damage (3 segments) + upward knockback launch on contact |
+| Quicksand (shallow) | Mario sinks slowly; reduced movement speed; jump to escape |
+| Quicksand (deep) | Mario sinks; instant death if fully submerged |
+| Wind zone | Constant horizontal force applied while Mario is in the area |
+
+### Knockback and Damage
+
+- Taking damage knocks Mario backward with a fixed impulse (~12 units/s).
+- Mario gets ~2 seconds of invincibility frames after taking damage (flashing visual). Cannot take further damage during this window.
+- Fall damage threshold: ~11 units of vertical distance (~6x Mario's height). Deals 3 segments and a brief stun on landing.
+- Falling into a void / bottomless pit = instant death (lose a life regardless of health).
+
+### Water Physics
+
+- Mario floats on the surface by default. A button paddles forward.
+- Diving underwater (Z on surface): free 3D movement. A button gives a speed burst in the facing direction. Stick controls pitch and yaw.
+- Gravity is greatly reduced underwater (~15% of normal).
+- The health meter doubles as an air meter while submerged. Wedges drain at ~1 segment per 4 seconds.
+- Air replenished by collecting coins underwater or surfacing.
+- At zero air/health: Mario drowns (lose a life).
+- Metal Cap: Mario sinks to the bottom and walks normally with infinite air, normal gravity.
+
 ## Health and Lives
 
 ### Power Meter
@@ -383,24 +355,32 @@ Key rules:
 ### Healing
 
 - Yellow coin: restores 1 segment.
-- Blue coin: restores 5 segments (worth 5 yellow coins).
-- Red coin: restores 2 segments (worth 2 yellow coins toward 100-coin star).
+- Blue coin: restores 5 segments.
+- Red coin: restores 2 segments.
 - Spinning Heart: restores health continuously while Mario runs through it.
 - Entering/touching water surface: restores health gradually.
 
-### Coin Counter
+### Coins
 
-- Each course visit has a coin counter that starts at 0 and resets on exit.
-- Yellow coin = 1, Red coin = 2, Blue coin = 5.
-- Reaching 100 coins spawns a Power Star at Mario's location (one per course).
+Coins serve double duty as healing and as a per-course counter:
+
+| Type | Coin Value | Health Restored |
+|------|-----------|-----------------|
+| Yellow | 1 | 1 segment |
+| Red | 2 | 2 segments |
+| Blue | 5 | 5 segments |
+
+- Coin counter resets to 0 on each course entry.
+- Reaching 50 coins grants an extra life.
+- Reaching 100 coins spawns a Power Star at Mario's location (one per course) and grants an extra life.
+- 8 red coins per course; collecting all 8 spawns an additional Power Star.
 
 ### Lives
 
 - Mario starts with 4 lives.
 - 1-Up mushrooms grant an extra life.
-- Collecting 100 coins in a course grants an extra life (in addition to the star).
-- Collecting 50 coins in a course grants an extra life.
-- Game Over at 0 lives — restart from file select screen.
+- Extra lives from coins as described above.
+- Game Over at 0 lives — return to file select screen, lives reset to 4, all collected stars are kept.
 
 ## Camera System
 
@@ -412,7 +392,7 @@ Inspired by the original Lakitu camera, simplified for modern controls.
 - Follow distance: ~8 units behind, ~4 units above Mario's position.
 - Camera target: a point slightly above Mario's center (chest height), not his feet.
 - Interpolation: camera position and rotation lerp smoothly toward the target (~5-10% per frame). Never teleports except on scene transitions.
-- Auto-centering: when the player is not manually rotating the camera, it slowly slerps to face the direction Mario is moving (~2% per frame). Does not fight the player — any manual input pauses auto-centering for ~1 second.
+- Auto-centering: when the player is not manually rotating the camera, it slowly slerps to face the direction Mario is moving (~2% per frame). Any manual input pauses auto-centering for ~1 second.
 
 ### Player Control
 
@@ -436,16 +416,19 @@ Inspired by the original Lakitu camera, simplified for modern controls.
 - **Cannon aim:** Camera switches to first-person inside the cannon barrel. Stick aims the crosshair. Launching returns to third-person tracking the flight arc.
 - **Cutscene/star collect:** Camera moves to a scripted position (e.g., looking at the star, looking at a door opening). Player input is locked during these moments.
 
+---
+
+# Game Content
+
 ## Level Structure
 
 ### Hub World — Peach's Castle
 
 - Central hub connecting all courses.
 - Three floors plus basement and courtyard.
-- Courses accessed by jumping into paintings (or equivalent portals). Entering a painting opens a star select screen showing the 6 mission names; selected star can affect object/enemy placement in the level.
-- Doors require star counts to open (1-star door, 3-star door, 8-star door, etc.).
+- Courses accessed by jumping into paintings (or equivalent portals).
+- Doors require star counts to open (see Star Progression table).
 - Key locations unlock as player progresses (basement key from Bowser 1, second floor key from Bowser 2).
-- Exiting a course: collecting a star warps Mario out, or use the pause menu "Exit Course" (lose no progress except unsaved coins).
 
 ### Main Courses (15)
 
@@ -473,11 +456,11 @@ Each course has 7 Power Stars:
 
 ### Bowser Levels (3)
 
-Linear obstacle-course levels ending in a Bowser boss fight:
+Linear obstacle-course levels ending in a Bowser boss fight (see Bowser Fight Detail under Enemies):
 
-1. **Bowser in the Dark World** — unlocked at ~8 stars. Rewards basement key.
-2. **Bowser in the Fire Sea** — unlocked at ~30 stars. Rewards second floor key.
-3. **Bowser in the Sky** — unlocked at 70 stars (endless stairs). Final boss, completes the game.
+1. **Bowser in the Dark World** — unlocked at ~8 stars.
+2. **Bowser in the Fire Sea** — unlocked at ~30 stars.
+3. **Bowser in the Sky** — unlocked at 70 stars (endless stairs). Final boss.
 
 ### Secret / Bonus Courses
 
@@ -509,14 +492,14 @@ Activated by hitting colored cap blocks (must first press corresponding switch i
 | Cap | Color | Duration | Effect |
 |-----|-------|----------|--------|
 | Wing Cap | Red | 60 seconds | Triple jump or cannon launch enters flight mode. Stick up = dive (gain speed, lose altitude), stick down = climb (lose speed, gain altitude). Touching ground cancels flight. |
-| Metal Cap | Green | 20 seconds | Invulnerable, heavy. Walk underwater, immune to gas/wind. Cannot be grabbed by enemies. |
+| Metal Cap | Green | 20 seconds | Invulnerable, heavy. Walk underwater with infinite air, immune to gas/wind. Cannot be grabbed by enemies. |
 | Vanish Cap | Blue | 20 seconds | Semi-transparent. Walk through certain walls, metal grates, and enemies. Still affected by gravity. |
 
 Caps can be combined (e.g., Metal + Vanish in certain levels) for both effects simultaneously.
 
 ## Enemies
 
-### Enemy AI Framework
+### AI Framework
 
 All enemies share a common behavior structure:
 
@@ -560,7 +543,7 @@ All enemies share a common behavior structure:
 | Big Boo | Big Boo's Haunt | Face away to lure it close, turn and punch. 3 hits. |
 | Eyerok | Shifting Sand Land | Punch the eye on each hand when exposed. |
 | Wiggler | Tiny-Huge Island | Jump on 3 times (gets angrier each time). |
-| Bowser | 3 Bowser stages | See detailed Bowser fight section below. |
+| Bowser | 3 Bowser stages | See Bowser Fight Detail below. |
 
 ### Bowser Fight Detail
 
@@ -581,27 +564,20 @@ All three Bowser fights take place on a circular floating arena with spiked bomb
 
 **Per-Fight Differences:**
 
-| Fight | Hits | Arena | Bowser Behavior |
-|-------|------|-------|-----------------|
-| Dark World | 1 | Full circle, 5 bombs | Fire breath and charge only. Slow movement. |
-| Fire Sea | 1 | Full circle, 5 bombs | Adds ground pound shockwave. Faster movement. Arena tilts after Bowser takes damage. |
-| Sky | 3 | Full circle → star shape | All attacks including fire rain. After hit 2, outer edge crumbles away forming a smaller star-shaped arena. Fewer bombs remain. Third throw requires more spin momentum to reach the remaining bombs. |
-
-**Rewards:**
-- Fight 1: Basement key.
-- Fight 2: Second floor key.
-- Fight 3: Grand Star — game completion.
+| Fight | Hits | Arena | Bowser Behavior | Reward |
+|-------|------|-------|-----------------|--------|
+| Dark World | 1 | Full circle, 5 bombs | Fire breath and charge only. Slow movement. | Basement key |
+| Fire Sea | 1 | Full circle, 5 bombs | Adds ground pound shockwave. Faster movement. Arena tilts after damage. | Second floor key |
+| Sky | 3 | Full circle → star shape | All attacks including fire rain. After hit 2, outer edge crumbles away forming a smaller star-shaped arena. Fewer bombs remain. Third throw requires more spin momentum. | Grand Star — game completion |
 
 ## Object Interactions
 
 | Object | Interaction |
 |--------|-------------|
-| Yellow coin | Walk through to collect (1 coin) |
-| Red coin | Walk through to collect (2 coins); 8 per course, collecting all 8 spawns a Power Star |
-| Blue coin | Walk through to collect (5 coins); often hidden or triggered by specific actions |
+| Coins (yellow/red/blue) | Walk through to collect; see Coins under Health and Lives for values |
 | Coin ring (circle of coins) | Pass through center or collect individually |
 | 1-Up Mushroom | Chase and touch (moves away from Mario) |
-| Star | Walk into to collect; triggers exit from course |
+| Power Star | Walk into to collect; triggers exit from course |
 | Corkbox / Breakable box | Punch, ground-pound, or dive to break; may contain coins or 1-Up |
 | Metal box | Only breakable with Metal Cap |
 | Sign | Stand near and press B to read |
@@ -616,52 +592,11 @@ All three Bowser fights take place on a circular floating arena with spiked bomb
 | Cap Block (red/green/blue) | Punch to activate; dispenses corresponding cap (only after switch pressed in secret stage) |
 | Teleport warp | Invisible spots in certain courses; standing on one warps to a paired location |
 
-## Level Data Format
+---
 
-Each course is defined by a set of data files in the resources directory:
-
-### Geometry
-
-- **Visual mesh:** OBJ (or custom binary) file defining the renderable level geometry with vertex positions, normals, UVs, and material/color assignments.
-- **Collision mesh:** Separate (or tagged) triangle mesh used for physics only. Each triangle has:
-  - Surface type enum (normal, ice, lava, shallow quicksand, deep quicksand, wall-only).
-  - Collision layer bits.
-  - Pre-computed surface normal.
-- The collision mesh can be a simplified version of the visual mesh (fewer triangles in areas the player can't reach).
-
-### Object Placement
-
-A per-course data file (JSON, custom binary, or hardcoded structs during early development) listing all placed objects:
-
-```
-{
-  "course_id": 1,
-  "objects": [
-    { "type": "goomba", "pos": [10, 0, 5], "patrol": [[10,0,5], [20,0,5]] },
-    { "type": "coin_yellow", "pos": [15, 2, 8] },
-    { "type": "star", "id": 3, "pos": [50, 20, 10], "condition": "defeat_king_bobomb" },
-    { "type": "cannon", "pos": [5, 0, 30], "aim_dir": [0.5, 0.7, 0] },
-    { "type": "warp_painting", "pos": [0, 3, -10], "target_course": 2 }
-  ]
-}
-```
-
-Each object entry defines:
-- **type** — enemy, collectible, trigger, NPC, or interactable.
-- **pos** — world-space spawn position.
-- **Optional fields:** patrol path points, detection radius override, linked star ID, condition for appearing (e.g., only on certain star selections), target destination (for warps/doors).
-
-### Per-Star Variations
-
-Some objects only appear when a specific star is selected at the star select screen. The object placement data supports a `"star_filter": [1, 3]` field — the object only spawns if the player selected star 1 or 3. Objects with no star filter spawn always.
-
-### Course Metadata
-
-Per-course metadata (name, star names, sky color, music track, coin target, etc.) stored alongside the object data or in a master course list file.
+# Presentation
 
 ## HUD Layout
-
-All HUD elements rendered via gl2d + glui in orthographic projection over the 3D scene.
 
 ```
 ┌──────────────────────────────────────────────────┐
@@ -687,17 +622,17 @@ All HUD elements rendered via gl2d + glui in orthographic projection over the 3D
 | Lives Counter | Top-right, below coins | Mario icon + lives remaining. Only shown briefly on course entry or life change. |
 | Course/Star Name | Bottom-center | Displays on course entry for ~3 seconds, then fades. |
 | Action prompt | Bottom-center | Context-sensitive text when near signs/NPCs ("Press B to read"). |
-| Pause overlay | Full screen | Semi-transparent dark overlay with pause menu (Resume / Exit Course) centered. |
+| Pause overlay | Full screen | Semi-transparent dark overlay with pause menu centered. |
 
 ## Menu Flow
 
 ### 1. Title Screen
 
-- Background: 3D scene of Peach's Castle exterior (or a static image of it during early development).
+- Background: 3D scene of Peach's Castle exterior (or a static image during early development).
 - Game logo displayed top-center.
 - "Press Start" prompt at bottom-center, pulsing or blinking.
 - Any button press transitions to the File Select screen.
-- If idle for ~30 seconds, plays a short demo/attract sequence (Mario running through a course). Optional — can skip for early builds.
+- If idle for ~30 seconds, plays a short demo/attract sequence. Optional for early builds.
 
 ### 2. File Select
 
@@ -730,8 +665,8 @@ All HUD elements rendered via gl2d + glui in orthographic projection over the 3D
 ### 5. Game Over
 
 - Shown when lives reach 0.
-- Displays "Game Over" text with Mario's face / sad animation.
-- Two options: "Continue" (return to file select, lives reset to 4, keep all collected stars) or "Quit" (return to title screen).
+- Displays "Game Over" text.
+- Two options: "Continue" (return to file select, lives reset to 4, all collected stars kept) or "Quit" (return to title screen).
 
 ### 6. Ending
 
@@ -742,11 +677,11 @@ All HUD elements rendered via gl2d + glui in orthographic projection over the 3D
 
 ## Audio
 
-Sound design using raudio (already integrated). All assets are original or royalty-free — no ripped Nintendo audio.
+All assets are original or royalty-free — no ripped Nintendo audio. Uses raudio (already integrated).
 
 ### Music Tracks
 
-Looping background tracks. Can be OGG or WAV format.
+Looping background tracks. OGG format recommended.
 
 | Track | Where it plays | Mood/Style |
 |-------|---------------|------------|
@@ -784,9 +719,10 @@ Short one-shot musical stings, ~2-5 seconds each.
 
 ### Sound Effects
 
-All SFX are short one-shot samples (WAV recommended for low latency).
+All SFX are short one-shot samples. WAV format recommended for low latency.
 
 **Mario — Movement:**
+
 | SFX | Trigger |
 |-----|---------|
 | Footstep (normal) | Each step while walking/running on solid ground |
@@ -813,6 +749,7 @@ All SFX are short one-shot samples (WAV recommended for low latency).
 | Crawl | Crawling movement |
 
 **Mario — Combat:**
+
 | SFX | Trigger |
 |-----|---------|
 | Punch | Each hit of the punch combo |
@@ -822,6 +759,7 @@ All SFX are short one-shot samples (WAV recommended for low latency).
 | Throw | Throwing a held object |
 
 **Mario — Damage:**
+
 | SFX | Trigger |
 |-----|---------|
 | Hurt (small) | Taking 1 segment of damage |
@@ -832,6 +770,7 @@ All SFX are short one-shot samples (WAV recommended for low latency).
 | Drowning | Running out of air underwater |
 
 **Collectibles:**
+
 | SFX | Trigger |
 |-----|---------|
 | Coin | Collecting any coin |
@@ -845,6 +784,7 @@ All SFX are short one-shot samples (WAV recommended for low latency).
 | Cap Expire | Cap power-up wearing off (warning beeps before expiry) |
 
 **Enemies:**
+
 | SFX | Trigger |
 |-----|---------|
 | Goomba Squish | Goomba defeated by jump |
@@ -863,6 +803,7 @@ All SFX are short one-shot samples (WAV recommended for low latency).
 | Chain Chomp Free | Freeing Chain Chomp from post |
 
 **Environment:**
+
 | SFX | Trigger |
 |-----|---------|
 | Door Open | Opening a regular door |
@@ -879,6 +820,7 @@ All SFX are short one-shot samples (WAV recommended for low latency).
 | Waterfall | Ambient waterfall loop |
 
 **UI:**
+
 | SFX | Trigger |
 |-----|---------|
 | Menu Select | Moving cursor between options |
@@ -904,33 +846,15 @@ Can be omitted entirely for early builds. If included, use original recordings �
 | "Mama mia!" | Death |
 | Drowning gasp | Running out of air |
 
-### Implementation Notes
+---
 
-- raudio supports WAV, OGG, MP3, and FLAC. Use OGG for music (smaller files), WAV for SFX (no decode latency).
-- Music crossfades when transitioning between areas (~1 second fade).
-- Underwater filter: when Mario is submerged, apply a low-pass filter or swap to a muffled version of the current track.
-- Cap expiry warning: play a repeating beep during the last 5 seconds of a cap power-up.
-- Footstep SFX are driven by animation events or a timer based on movement speed (faster = more frequent).
+# Meta
 
 ## Save System
 
 - Game saves when Mario collects a star and exits a course.
 - Four save file slots.
 - Save data tracks: stars collected (per course), star total, keys obtained, cap switches pressed.
-
-## Implementation Priority
-
-For incremental development, implement in this order:
-
-1. **Phase 1 — Core Movement:** Mario controller with full movement set on a flat test level. Camera system.
-2. **Phase 2 — Physics:** Slopes, gravity, ledge grabs, wall jumps, swimming. Health system.
-3. **Phase 3 — First Course:** Bob-omb Battlefield with Goombas, Bob-ombs, King Bob-omb boss, 7 stars.
-4. **Phase 4 — Hub World:** Peach's Castle exterior + first floor interior. Star doors, course entry via paintings.
-5. **Phase 5 — Bowser Fight:** Bowser in the Dark World level + boss arena.
-6. **Phase 6 — Additional Courses:** Build out remaining courses incrementally.
-7. **Phase 7 — Cap Power-Ups:** Wing, Metal, Vanish caps and their secret stages.
-8. **Phase 8 — Polish:** Save system, lives/game-over flow, remaining secret stars, title screen.
-
 ## References
 
 - [Super Mario 64 — StrategyWiki: Controls](https://strategywiki.org/wiki/Super_Mario_64/Controls)

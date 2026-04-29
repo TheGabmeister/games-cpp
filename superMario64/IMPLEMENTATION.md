@@ -63,14 +63,7 @@ Sphere-based per-object check against the 6 frustum planes. Level geometry can b
 
 ### Mesh Loading
 
-Models loaded from OBJ, parsed at load time into VBOs (position, normal, UV/color). Levels are static meshes loaded once per course. Animated characters either swap pre-made meshes per frame or use simple bone-based vertex animation.
-
-**Decision needed:** Model loading library:
-- **tinyobjloader** — header-only, widely used, handles OBJ well.
-- **Custom minimal OBJ parser** — fewer dependencies, we only need positions/normals/colors.
-- **Custom binary format** — fastest loading, but needs an export pipeline.
-
-Recommendation: tinyobjloader. We can add a binary cache later.
+Models use glTF/GLB format (supports static meshes and skeletal animation in one format). Loaded via cgltf (header-only C library, vendored in `thirdparty/cgltf/`), parsed at load time into VBOs (position, normal, UV/color). Levels are static meshes loaded once per course. Animated characters use skeletal animation data from the glTF file.
 
 ---
 
@@ -78,7 +71,7 @@ Recommendation: tinyobjloader. We can add a binary cache later.
 
 A single "basic" shader handles most rendering: vertex inputs are position, normal, and color; uniforms are model/view/projection matrices plus light direction and ambient color. Output is simple directional diffuse lighting. Add shader variants later as needed.
 
-**Decision needed:** Should we support textures from day one, or start with vertex colors only? Vertex colors are simpler and match the low-poly goal. Textures add richness but complicate the model pipeline.
+Start with vertex colors only. Add texture support in Phase 3+.
 
 ---
 
@@ -118,13 +111,7 @@ Recommendation: uniform grid to start, switch to BVH if perf is an issue.
 
 Each course has a visual mesh (OBJ), a separate collision mesh (simplified, surface-typed triangles), and an object placement file listing all spawns with type, position, and optional fields (patrol path, star filter, linked star ID, condition). Course metadata (name, star names, sky color, music track) is stored alongside or in a master course list. Early phases can hardcode everything; file-based loading comes in Phase 3+.
 
-**Decision needed:** For JSON parsing (object placement data):
-- **nlohmann/json** — header-only, easy API, ~20k lines.
-- **rapidjson** — faster, harder API.
-- **Custom minimal parser** — we only need flat object arrays.
-- **Skip JSON** — hardcoded structs or a simpler text format.
-
-Recommendation: nlohmann/json, vendored as a single header.
+Object placement data parsed with nlohmann/json (vendored in `thirdparty/nlohmann_json/`).
 
 ---
 
@@ -158,11 +145,8 @@ Raw struct serialization via the existing `platform::writeEntireFile` / `platfor
 
 | # | Decision | Options | Recommendation |
 |---|----------|---------|----------------|
-| 4 | Model loading | tinyobjloader vs custom OBJ parser vs custom binary | tinyobjloader (header-only, reliable) |
-| 5 | Textures | Vertex colors only vs textures from day one | Start vertex colors, add textures in Phase 3+ |
 | 6 | Entity system | Union struct vs inheritance vs components | Union struct — simple, fast, good enough for ~20 types |
 | 7 | Spatial partitioning | Uniform grid vs BVH vs octree | Uniform grid to start, BVH if needed |
-| 8 | JSON library | nlohmann/json vs rapidjson vs custom parser | nlohmann/json (header-only, easiest API) |
 | 9 | Shaders | Single uber-shader vs per-material shaders | Single basic shader to start, add variants as needed |
 
 ---

@@ -90,9 +90,9 @@ struct Mario
 	static constexpr float GROUND_POUND_GRAVITY_MULT = 2.f;
 
 	// Timing windows (in seconds)
-	static constexpr float JUMP_BUFFER_WINDOW = 4.f / 60.f;
+	static constexpr float JUMP_BUFFER_WINDOW = 8.f / 60.f;
 	static constexpr float COYOTE_TIME = 5.f / 60.f;
-	static constexpr float JUMP_CHAIN_WINDOW = 10.f / 60.f;
+	static constexpr float JUMP_CHAIN_WINDOW = 20.f / 60.f;
 	static constexpr float COMBO_WINDOW = 10.f / 60.f;
 
 	// Action speeds

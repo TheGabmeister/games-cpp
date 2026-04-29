@@ -230,11 +230,11 @@ Input abstraction (`GameInput` struct). Mario model (Blender-generated). Walk/ru
 All jump variants (double, triple, long, backflip, side somersault). Crouch, crawl. Punch combo, kick, dive, slide kick. Jump buffering + coyote time. Skeletal animation system driven by the state machine (~30 states). Mario animations from Blender.
 
 **Jump Variants:**
-- [ ] Single jump: Space from idle or moving. Mario rises and falls. State shows SINGLE_JUMP → FREEFALL → LANDING.
+- [x] Single jump: Space from idle or moving. Mario rises and falls. State shows SINGLE_JUMP → FREEFALL → LANDING.
 - [ ] Double jump: Jump, land, immediately jump again. State shows DOUBLE_JUMP. Noticeably higher than single.
 - [ ] Triple jump: Jump, land, jump, land, jump while running (speed > 12). State shows TRIPLE_JUMP. Highest jump. Fails if too slow or too long between landings.
-- [ ] Long jump: Hold Ctrl + Space while running. Low arc, long horizontal distance. State shows LONG_JUMP. No air steering.
-- [ ] Backflip: Hold Ctrl + Space while stationary/slow. Very high vertical jump. State shows BACKFLIP.
+- [x] Long jump: Hold Ctrl + Space while running. Low arc, long horizontal distance. State shows LONG_JUMP. No air steering.
+- [x] Backflip: Hold Ctrl + Space while stationary/slow. Very high vertical jump. State shows BACKFLIP.
 - [ ] Side somersault: Run, reverse direction to trigger skid, then jump during skid. State shows SIDE_SOMERSAULT.
 - [ ] Jump chain resets: Doing a long jump, backflip, ground pound, dive, or any non-single/double jump between landings breaks the chain — next jump is always single.
 

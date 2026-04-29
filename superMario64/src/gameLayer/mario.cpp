@@ -372,6 +372,7 @@ void Mario::tryGroundJump(const GameInput &input, const glm::vec3 &cameraForward
 	{
 		velocity.y = DOUBLE_JUMP_VELOCITY;
 		onGround = false;
+		jumpChainCount = 2;
 		enterState(MarioState::DOUBLE_JUMP);
 		return;
 	}
@@ -379,6 +380,7 @@ void Mario::tryGroundJump(const GameInput &input, const glm::vec3 &cameraForward
 	// Single jump (default)
 	velocity.y = JUMP_VELOCITY;
 	onGround = false;
+	jumpChainCount = 1;
 	enterState(MarioState::SINGLE_JUMP);
 }
 
@@ -395,13 +397,7 @@ void Mario::resolveGroundCollision(float dt)
 
 		if (!onGround)
 		{
-			// Just landed — set chain count based on what we landed from
-			if (state == MarioState::SINGLE_JUMP)
-				jumpChainCount = 1;
-			else if (state == MarioState::DOUBLE_JUMP)
-				jumpChainCount = 2;
-			else
-				jumpChainCount = 0;
+			// Just landed — jumpChainCount was already set in tryGroundJump
 
 			jumpChainTimer = 0.f;
 

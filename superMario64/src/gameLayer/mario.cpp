@@ -107,10 +107,24 @@ float Mario::getHorizontalSpeed() const
 	return glm::length(glm::vec2(velocity.x, velocity.z));
 }
 
-GroundResult Mario::checkGround() const
+GroundResult Mario::checkGround(const CollisionWorld *world, float maxAbove, float maxBelow) const
 {
 	GroundResult r;
-	if (position.y <= 0.f)
+	if (world && world->isLoaded())
+	{
+		CollisionHit hit;
+		if (queryGround(*world, position, COLLISION_RADIUS, maxAbove, maxBelow, hit))
+		{
+			r.hit = true;
+			r.groundY = hit.y;
+			r.normal = hit.normal;
+			r.surface = hit.surface;
+			r.slopeClass = hit.slopeClass;
+		}
+		return r;
+	}
+
+	if (position.y <= maxAbove)
 	{
 		r.hit = true;
 		r.groundY = 0.f;
@@ -206,6 +220,9 @@ void Mario::applyGroundMovement(const GameInput &input, float dt, const glm::vec
 {
 	glm::vec3 wishDir = inputToWorldDir(input, cameraForward);
 	float targetSpeed = input.moveStrength * RUN_SPEED;
+	float accelScale = (onGround && groundSurface == SurfaceType::Ice) ? 0.35f : 1.f;
+	float decelScale = (onGround && groundSurface == SurfaceType::Ice) ? 0.12f : 1.f;
+	float turnScale = (onGround && groundSurface == SurfaceType::Ice) ? 0.35f : 1.f;
 
 	glm::vec2 hVel(velocity.x, velocity.z);
 	float hSpeed = glm::length(hVel);
@@ -231,13 +248,13 @@ void Mario::applyGroundMovement(const GameInput &input, float dt, const glm::vec
 			float accelLen = glm::length(accel);
 			if (accelLen > 0.001f)
 			{
-				float maxAccel = GROUND_ACCEL * dt;
+				float maxAccel = GROUND_ACCEL * accelScale * dt;
 				if (accelLen > maxAccel)
 					accel = accel / accelLen * maxAccel;
 				hVel += accel;
 			}
 
-			facingAngle = lerpAngle(facingAngle, wishAngle, TURN_SPEED * dt);
+			facingAngle = lerpAngle(facingAngle, wishAngle, TURN_SPEED * turnScale * dt);
 
 			float speed = glm::length(hVel);
 			if (speed > WALK_SPEED * 0.5f && speed <= WALK_SPEED)
@@ -250,7 +267,7 @@ void Mario::applyGroundMovement(const GameInput &input, float dt, const glm::vec
 	}
 	else
 	{
-		float decel = GROUND_DECEL * dt;
+		float decel = GROUND_DECEL * decelScale * dt;
 		if (hSpeed > decel)
 			hVel *= (hSpeed - decel) / hSpeed;
 		else
@@ -384,16 +401,74 @@ void Mario::tryGroundJump(const GameInput &input, const glm::vec3 &cameraForward
 	enterState(MarioState::SINGLE_JUMP);
 }
 
-// ---- Ground Collision ----
+// ---- World Collision ----
 
-void Mario::resolveGroundCollision(float dt)
+static bool isAirborneState(MarioState state)
 {
-	GroundResult ground = checkGround();
+	return state == MarioState::SINGLE_JUMP || state == MarioState::DOUBLE_JUMP ||
+		state == MarioState::TRIPLE_JUMP || state == MarioState::LONG_JUMP ||
+		state == MarioState::BACKFLIP || state == MarioState::SIDE_SOMERSAULT ||
+		state == MarioState::FREEFALL || state == MarioState::GROUND_POUND_SPIN ||
+		state == MarioState::GROUND_POUND_FALL || state == MarioState::JUMP_KICK ||
+		state == MarioState::DIVE || state == MarioState::SLIDE_KICK;
+}
+
+void Mario::resolveCollision(const CollisionWorld *world, float dt, const glm::vec3 &previousPosition)
+{
+	if (world && world->isLoaded())
+	{
+		resolveHorizontalCollisions(*world, position, velocity, COLLISION_RADIUS, HEIGHT, STEP_HEIGHT);
+
+		if (velocity.y > 0.f)
+		{
+			CollisionHit ceiling;
+			if (queryCeiling(*world, position, COLLISION_RADIUS, HEIGHT, ceiling))
+			{
+				position.y = ceiling.y - HEIGHT - 0.02f;
+				velocity.y = 0.f;
+				if (state == MarioState::SINGLE_JUMP || state == MarioState::DOUBLE_JUMP ||
+					state == MarioState::TRIPLE_JUMP || state == MarioState::BACKFLIP ||
+					state == MarioState::SIDE_SOMERSAULT || state == MarioState::LONG_JUMP)
+				{
+					enterState(MarioState::FREEFALL);
+				}
+			}
+		}
+	}
+
+	float maxAbove = STEP_HEIGHT;
+	float maxBelow = 0.65f;
+	if (!onGround)
+	{
+		maxAbove = 0.08f;
+		maxBelow = std::max(0.25f, std::max(0.f, previousPosition.y - position.y) + 0.2f);
+	}
+
+	GroundResult ground = checkGround(world, maxAbove, maxBelow);
 
 	if (ground.hit && velocity.y <= 0.f)
 	{
 		position.y = ground.groundY;
 		velocity.y = 0.f;
+		groundNormal = ground.normal;
+		groundSurface = ground.surface;
+		groundSlope = ground.slopeClass;
+
+		if (ground.slopeClass == SlopeClass::Steep)
+		{
+			glm::vec3 downSlope = glm::vec3(0.f, -1.f, 0.f) -
+				ground.normal * glm::dot(glm::vec3(0.f, -1.f, 0.f), ground.normal);
+			if (glm::length(downSlope) > 0.001f)
+			{
+				downSlope = glm::normalize(downSlope);
+				float uphill = glm::dot(glm::vec3(velocity.x, 0.f, velocity.z), -downSlope);
+				if (uphill < TRIPLE_JUMP_SPEED_THRESHOLD)
+				{
+					velocity.x += downSlope.x * 18.f * dt;
+					velocity.z += downSlope.z * 18.f * dt;
+				}
+			}
+		}
 
 		if (!onGround)
 		{
@@ -419,12 +494,8 @@ void Mario::resolveGroundCollision(float dt)
 			if (jumpBufferTimer > 0.f)
 			{
 				onGround = true;
-				jumpBufferTimer = 0.f;
-				// Pass last known input — we need cameraForward but don't have it here.
-				// The buffered jump will be handled next frame from the landing state.
-				// Actually, for responsive feel we should do it here. We store cameraForward
-				// isn't available in this function, so we enter LANDING and tryGroundJump
-				// will fire on the next frame from updateLanding.
+				// updateLanding consumes this on the next fixed step, where camera-relative
+				// jump variants have the input context they need.
 			}
 
 			onGround = true;
@@ -436,18 +507,17 @@ void Mario::resolveGroundCollision(float dt)
 	}
 	else if (!ground.hit)
 	{
+		groundNormal = {0.f, 1.f, 0.f};
+		groundSurface = SurfaceType::Normal;
+		groundSlope = SlopeClass::Walkable;
+
 		if (onGround)
 		{
 			// Just left ground — start coyote timer (already set in updateInputBuffers)
 			onGround = false;
 		}
 
-		if (state != MarioState::SINGLE_JUMP && state != MarioState::DOUBLE_JUMP &&
-		    state != MarioState::TRIPLE_JUMP && state != MarioState::LONG_JUMP &&
-		    state != MarioState::BACKFLIP && state != MarioState::SIDE_SOMERSAULT &&
-		    state != MarioState::FREEFALL && state != MarioState::GROUND_POUND_SPIN &&
-		    state != MarioState::GROUND_POUND_FALL && state != MarioState::JUMP_KICK &&
-		    state != MarioState::DIVE && state != MarioState::SLIDE_KICK)
+		if (!isAirborneState(state))
 		{
 			enterState(MarioState::FREEFALL);
 		}
@@ -775,9 +845,10 @@ void Mario::updateLanding(const GameInput &input, float dt, const glm::vec3 &cam
 
 // ---- Main Update ----
 
-void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForward)
+void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForward, const CollisionWorld *world)
 {
 	updateInputBuffers(input, dt);
+	glm::vec3 previousPosition = position;
 
 	switch (state)
 	{
@@ -808,5 +879,5 @@ void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForw
 	}
 
 	position += velocity * dt;
-	resolveGroundCollision(dt);
+	resolveCollision(world, dt, previousPosition);
 }

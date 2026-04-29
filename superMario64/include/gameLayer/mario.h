@@ -2,6 +2,7 @@
 #include <glm/glm.hpp>
 #include "input.h"
 #include "animation.h"
+#include "world.h"
 
 struct SkinnedModel;
 
@@ -40,6 +41,8 @@ struct GroundResult
 	bool hit = false;
 	float groundY = 0.f;
 	glm::vec3 normal = {0.f, 1.f, 0.f};
+	SurfaceType surface = SurfaceType::Normal;
+	SlopeClass slopeClass = SlopeClass::Walkable;
 };
 
 struct Mario
@@ -49,6 +52,9 @@ struct Mario
 	float facingAngle = 0.f;
 	MarioState state = MarioState::IDLE;
 	bool onGround = true;
+	glm::vec3 groundNormal = {0.f, 1.f, 0.f};
+	SurfaceType groundSurface = SurfaceType::Normal;
+	SlopeClass groundSlope = SlopeClass::Walkable;
 
 	// Jump chain tracking
 	int jumpChainCount = 0;
@@ -78,6 +84,8 @@ struct Mario
 	static constexpr float SKID_THRESHOLD = 10.f;
 	static constexpr float TURN_SPEED = 720.f;
 	static constexpr float HEIGHT = 1.5f;
+	static constexpr float COLLISION_RADIUS = 0.35f;
+	static constexpr float STEP_HEIGHT = 0.3f;
 
 	// Jump variant constants
 	static constexpr float DOUBLE_JUMP_VELOCITY = 28.f;
@@ -102,7 +110,7 @@ struct Mario
 
 	AnimState animState;
 
-	void update(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void update(const GameInput &input, float dt, const glm::vec3 &cameraForward, const CollisionWorld *world = nullptr);
 	void setAnimClips(const SkinnedModel &model);
 
 private:
@@ -122,7 +130,7 @@ private:
 	void updateSlideKick(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 	void updateLanding(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 
-	void resolveGroundCollision(float dt);
+	void resolveCollision(const CollisionWorld *world, float dt, const glm::vec3 &previousPosition);
 	void tryGroundJump(const GameInput &input, const glm::vec3 &cameraForward);
 	void enterState(MarioState newState);
 	float getHorizontalSpeed() const;
@@ -130,7 +138,7 @@ private:
 	void applyGroundMovement(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 	void applyAirMovement(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 	void applyGravity(const GameInput &input, float dt);
-	GroundResult checkGround() const;
+	GroundResult checkGround(const CollisionWorld *world, float maxAbove, float maxBelow) const;
 	glm::vec3 inputToWorldDir(const GameInput &input, const glm::vec3 &cameraForward) const;
 
 	float skidTimer = 0.f;

@@ -15,6 +15,7 @@
 #include "camera.h"
 #include "mario.h"
 #include "animation.h"
+#include "world.h"
 
 gl2d::Renderer2D renderer2d;
 
@@ -37,6 +38,14 @@ Mesh groundPlane;
 Mesh cubes[5];
 Mesh testModel;
 bool testModelLoaded = false;
+Mesh phase4CollisionVisual;
+bool phase4CollisionVisualLoaded = false;
+
+CollisionWorld collisionWorld;
+LineMesh collisionWireMesh;
+bool collisionWorldLoaded = false;
+bool collisionWireMeshLoaded = false;
+bool showCollisionOverlay = true;
 
 LineMesh gridMesh;
 LineMesh axisMesh;
@@ -85,6 +94,14 @@ bool initGame()
 
 	testModel = loadGLB(RESOURCES_PATH "models/test_scene.glb");
 	testModelLoaded = (testModel.vao != 0);
+	phase4CollisionVisual = loadGLB(RESOURCES_PATH "courses/phase4_collision.glb");
+	phase4CollisionVisualLoaded = (phase4CollisionVisual.vao != 0);
+	collisionWorldLoaded = loadCollisionWorldGLB(RESOURCES_PATH "courses/phase4_collision.glb", collisionWorld);
+	if (collisionWorldLoaded)
+	{
+		collisionWireMesh = createCollisionWireMesh(collisionWorld);
+		collisionWireMeshLoaded = (collisionWireMesh.vao != 0);
+	}
 
 	marioModel = loadSkinnedGLB(RESOURCES_PATH "models/mario.glb");
 	marioModelLoaded = (marioModel.mesh.vao != 0);
@@ -157,7 +174,7 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		if (!animViewerMode)
 		{
 			glm::vec3 camFwd = getOrbitCameraForward();
-			mario.update(currentInput, FIXED_DT, camFwd);
+			mario.update(currentInput, FIXED_DT, camFwd, collisionWorldLoaded ? &collisionWorld : nullptr);
 
 			if (marioModelLoaded)
 				updateAnimState(mario.animState, marioModel.clips, FIXED_DT);
@@ -210,6 +227,8 @@ bool gameLogic(float deltaTime, platform::Input &input)
 			renderMesh(basicShader, cubes[i], glm::translate(cubePositions[i]), vp);
 		if (testModelLoaded)
 			renderMesh(basicShader, testModel, glm::mat4(1.f), vp);
+		if (phase4CollisionVisualLoaded)
+			renderMesh(basicShader, phase4CollisionVisual, glm::mat4(1.f), vp);
 	}
 
 	// Mario (skinned)
@@ -227,6 +246,7 @@ bool gameLogic(float deltaTime, platform::Input &input)
 
 	// Debug overlays
 	glLineWidth(2.f);
+	if (showCollisionOverlay && collisionWireMeshLoaded) renderLines(lineShader, collisionWireMesh, vp);
 	if (showGrid) renderLines(lineShader, gridMesh, vp);
 	if (showAxes) renderLines(lineShader, axisMesh, vp);
 	glLineWidth(1.f);
@@ -243,6 +263,9 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		glm::vec2 hVel(mario.velocity.x, mario.velocity.z);
 		ImGui::Text("H Speed: %.2f  V Speed: %.2f", glm::length(hVel), mario.velocity.y);
 		ImGui::Text("Facing: %.1f  OnGround: %s", mario.facingAngle, mario.onGround ? "yes" : "no");
+		ImGui::Text("Ground: %s / %s  N(%.2f, %.2f, %.2f)",
+			surfaceTypeName(mario.groundSurface), slopeClassName(mario.groundSlope),
+			mario.groundNormal.x, mario.groundNormal.y, mario.groundNormal.z);
 		ImGui::Text("JumpChain: %d  Timer: %.3f", mario.jumpChainCount, mario.jumpChainTimer);
 		ImGui::Text("Buffer: %.3f  Coyote: %.3f", mario.jumpBufferTimer, mario.coyoteTimer);
 		ImGui::Text("Combo: step=%d timer=%.3f", mario.punchComboStep, mario.comboTimer);
@@ -260,6 +283,11 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		ImGui::Checkbox("Grid", &showGrid);
 		ImGui::SameLine();
 		ImGui::Checkbox("Axes", &showAxes);
+		ImGui::SameLine();
+		ImGui::Checkbox("Collision", &showCollisionOverlay);
+		ImGui::Text("Collision World: %s  tris=%d cells=%d",
+			collisionWorldLoaded ? "loaded" : "missing",
+			collisionWorld.triangleCount(), collisionWorld.occupiedCellCount());
 		ImGui::Text("Press 1: toggle debug UI");
 		ImGui::Text("Press 2: fly camera (%s)", useFlyCam ? "ON" : "OFF");
 		ImGui::Text("Press 4: anim viewer (%s)", animViewerMode ? "ON" : "OFF");
@@ -346,7 +374,9 @@ void closeGame()
 	destroyMesh(groundPlane);
 	for (auto &c : cubes) destroyMesh(c);
 	if (testModelLoaded) destroyMesh(testModel);
+	if (phase4CollisionVisualLoaded) destroyMesh(phase4CollisionVisual);
 	if (marioModelLoaded) destroySkinnedMesh(marioModel.mesh);
+	if (collisionWireMeshLoaded) destroyLineMesh(collisionWireMesh);
 	destroyLineMesh(gridMesh);
 	destroyLineMesh(axisMesh);
 	destroyShader(basicShader);

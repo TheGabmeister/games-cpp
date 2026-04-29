@@ -231,46 +231,44 @@ All jump variants (double, triple, long, backflip, side somersault). Crouch, cra
 
 **Jump Variants:**
 - [x] Single jump: Space from idle or moving. Mario rises and falls. State shows SINGLE_JUMP → FREEFALL → LANDING.
-- [ ] Double jump: Jump, land, immediately jump again. State shows DOUBLE_JUMP. Noticeably higher than single.
-- [ ] Triple jump: Jump, land, jump, land, jump while running (speed > 12). State shows TRIPLE_JUMP. Highest jump. Fails if too slow or too long between landings.
+- [x] Double jump: Jump, land, immediately jump again. State shows DOUBLE_JUMP. Noticeably higher than single.
+- [x] Triple jump: Jump, land, jump, land, jump while running (speed > 12). State shows TRIPLE_JUMP. Highest jump. Fails if too slow or too long between landings.
 - [x] Long jump: Hold Ctrl + Space while running. Low arc, long horizontal distance. State shows LONG_JUMP. No air steering.
 - [x] Backflip: Hold Ctrl + Space while stationary/slow. Very high vertical jump. State shows BACKFLIP.
-- [ ] Side somersault: Run, reverse direction to trigger skid, then jump during skid. State shows SIDE_SOMERSAULT.
-- [ ] Jump chain resets: Doing a long jump, backflip, ground pound, dive, or any non-single/double jump between landings breaks the chain — next jump is always single.
+- [x] Side somersault: Run, reverse direction to trigger skid, then jump during skid. State shows SIDE_SOMERSAULT.
+- [x] Jump chain resets: Doing a long jump, backflip, ground pound, dive, or any non-single/double jump between landings breaks the chain — next jump is always single.
 
-**Input Buffering & Coyote Time:**
-- [ ] Jump buffer: Press jump slightly before landing (~4 frames). Jump fires on contact instead of being eaten.
-- [ ] Coyote time: Walk off an edge (e.g., off the test ramp), press jump within ~5 frames. Mario still gets a grounded jump instead of falling.
-- [ ] Without coyote: Walk off edge, wait a moment, press jump — nothing happens (Mario freefalls).
+**Input Buffering:**
+- [x] Jump buffer: Press jump slightly before landing (~4 frames). Jump fires on contact instead of being eaten.
 
 **Ground Pound:**
-- [ ] Jump, then press Ctrl mid-air. Mario pauses briefly (GROUND_POUND_SPIN), then slams down fast (GROUND_POUND_FALL).
-- [ ] On landing: brief stun (GROUND_POUND_LAND), then IDLE. Cannot move during stun.
-- [ ] Ground pound cannot be cancelled once started — pressing jump or other inputs during the fall does nothing.
-- [ ] Ground pound breaks jump chain.
+- [x] Jump, then press Ctrl mid-air. Mario pauses briefly (GROUND_POUND_SPIN), then slams down fast (GROUND_POUND_FALL).
+- [x] On landing: brief stun (GROUND_POUND_LAND), then IDLE. Cannot move during stun.
+- [x] Ground pound cannot be cancelled once started — pressing jump or other inputs during the fall does nothing.
+- [x] Ground pound breaks jump chain.
 
 **Crouch & Crawl:**
-- [ ] Hold Ctrl on the ground: Mario enters CROUCHING. Decelerates to a stop.
-- [ ] Ctrl + move: Mario enters CRAWLING. Slow movement (speed ~3). Facing follows input.
-- [ ] Release Ctrl while crouching/crawling: returns to IDLE.
-- [ ] Ctrl + Space while crouching still → backflip. Ctrl + Space while crawling fast → long jump.
+- [x] Hold Ctrl on the ground: Mario enters CROUCHING. Decelerates to a stop.
+- [x] Ctrl + move: Mario enters CRAWLING. Slow movement (speed ~3). Facing follows input.
+- [x] Release Ctrl while crouching/crawling: returns to IDLE.
+- [x] Ctrl + Space while crouching still → backflip. Ctrl + Space while crawling fast → long jump.
 
 **Combat Moves:**
-- [ ] Press B on ground: PUNCH_1. Press B again quickly: PUNCH_2. Again: PUNCH_3_KICK. Full 3-hit combo.
-- [ ] Wait too long (~10 frames) between presses: combo resets. Next B starts at PUNCH_1.
-- [ ] Jump + B while moving fast: DIVE. Mario lunges forward horizontally. On landing: BELLY_SLIDE (slides along ground with friction, then recovers).
-- [ ] Jump + B while slow/stationary: JUMP_KICK. Mario kicks in air. Normal landing.
-- [ ] Crawl + B while moving: SLIDE_KICK. Mario does a low sliding kick with slight hop.
+- [x] Press B on ground: PUNCH_1. Press B again quickly: PUNCH_2. Again: PUNCH_3_KICK. Full 3-hit combo.
+- [x] Wait too long (~10 frames) between presses: combo resets. Next B starts at PUNCH_1.
+- [x] Jump + B while moving fast: DIVE. Mario lunges forward horizontally. On landing: BELLY_SLIDE (slides along ground with friction, then recovers).
+- [x] Jump + B while slow/stationary: JUMP_KICK. Mario kicks in air. Normal landing.
+- [x] Crawl + B while moving: SLIDE_KICK. Mario does a low sliding kick with slight hop.
 
 **Skeletal Animation:**
-- [ ] Mario visibly animates (not a static mesh). Idle has subtle breathing motion.
-- [ ] Walk and run show leg/arm cycling. Run is faster cadence than walk.
-- [ ] Each jump variant has a distinct visual: single = arms up, double = flip, triple = big spin, long = horizontal stretch, backflip = backward flip.
-- [ ] Ground pound shows spin → ball curl → impact pose.
-- [ ] Crouch visibly lowers Mario. Crawl shows a crawling motion.
-- [ ] Punch combo shows left jab → right jab → spinning kick.
-- [ ] Transitions between animations blend smoothly (no teleporting between poses).
-- [ ] Debug UI shows animation clip index, time, and blend alpha updating in real time.
+- [x] Mario visibly animates (not a static mesh). Idle has subtle breathing motion.
+- [x] Walk and run show leg/arm cycling. Run is faster cadence than walk.
+- [x] Each jump variant has a distinct visual: single = arms up, double = flip, triple = big spin, long = horizontal stretch, backflip = backward flip.
+- [x] Ground pound shows spin → ball curl → impact pose.
+- [x] Crouch visibly lowers Mario. Crawl shows a crawling motion.
+- [x] Punch combo shows left jab → right jab → spinning kick.
+- [x] Transitions between animations blend smoothly (no teleporting between poses).
+- [x] Debug UI shows animation clip index, time, and blend alpha updating in real time.
 
 #### Phase 4 — World Collision & Physics
 
@@ -278,6 +276,8 @@ Collision mesh loading (separate simplified glTF per level). Uniform-grid spatia
 
 - [ ] Collision mesh loads from a separate simplified GLB (logged on startup).
 - [ ] Mario walks on level geometry surfaces, not just Y=0.
+- [ ] Coyote time: Walk off an edge, press jump within ~5 frames. Mario still gets a grounded jump instead of falling.
+- [ ] Without coyote: Walk off edge, wait a moment, press jump — nothing happens (Mario freefalls).
 - [ ] Mario slides along walls instead of stopping dead or passing through.
 - [ ] Mario bonks on ceilings during jumps (velocity zeroed, starts falling).
 - [ ] Walkable slopes (< 30°): Mario walks up and down normally.

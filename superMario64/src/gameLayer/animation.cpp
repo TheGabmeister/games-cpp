@@ -120,7 +120,11 @@ void computeSkinMatrices(const Skeleton &skeleton, const AnimPose &pose, glm::ma
 
 void playClip(AnimState &state, int clipIndex, float blendTime)
 {
-	if (state.currentClip == clipIndex) return;
+	if (state.currentClip == clipIndex)
+	{
+		state.time = 0.f;
+		return;
+	}
 
 	state.previousClip = state.currentClip;
 	state.previousTime = state.time;

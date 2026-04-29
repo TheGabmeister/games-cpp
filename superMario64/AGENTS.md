@@ -57,6 +57,22 @@ The platform layer calls the game layer through the entry points declared in
 - All assets should be original, generated, or royalty-free. Do not add ripped
   Nintendo assets, audio, models, textures, or proprietary data.
 
+## Current Development Focus
+
+- Current milestone: Phase 4 -- World Collision & Physics in
+  `IMPLEMENTATION.md`.
+- Phases 1-3 are treated as functionally complete unless the task is explicitly
+  about fixing regressions in rendering, movement, camera, combat, or animation.
+- Prioritize separate collision GLB loading, triangle-grid queries, ground/wall/
+  ceiling collision, slope classification, step-up handling, and surface-type
+  behavior before expanding entities, courses, HUD, audio, or menus.
+- Keep coyote time and jump buffering behavior compatible with the movement
+  state machine while moving grounded checks from the flat Y=0 plane to level
+  geometry.
+- When adding collision test content, prefer generated or simplified assets under
+  `tools/` and `resources/courses/` so the visual level and collision mesh can
+  stay reproducible.
+
 ## Runtime Systems
 
 - Route the game through a top-level game state machine: title/file select,

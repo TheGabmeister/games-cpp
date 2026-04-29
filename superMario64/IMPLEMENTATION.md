@@ -6,39 +6,19 @@ High-level technical decisions and architecture for building the game described 
 
 ## Project Structure
 
-The existing two-layer architecture stays. Platform layer (main loop, GLFW, input, file I/O) is untouched — all new code goes in the game layer.
+The existing two-layer architecture stays. Platform layer (main loop, GLFW, input, file I/O) is untouched — all new code goes in the game layer. Start with few files, split when they grow large:
 
 ```
 src/gameLayer/
-├── gameLayer.cpp          # Entry points: initGame, gameLogic, closeGame
-├── player/
-│   ├── mario.cpp          # Mario state machine, movement, physics
-│   └── camera.cpp         # Third-person camera
-├── world/
-│   ├── level.cpp          # Level loading, course management
-│   ├── collision.cpp      # Collision detection and response
-│   └── physics.cpp        # Gravity, slopes, water, surfaces
-├── entities/
-│   ├── entity.cpp         # Base entity
-│   ├── enemies.cpp        # Enemy AI and behaviors
-│   └── objects.cpp        # Coins, stars, boxes, interactables
-├── rendering/
-│   ├── renderer3d.cpp     # 3D rendering pipeline, shaders
-│   ├── meshLoader.cpp     # OBJ loading, VBO management
-│   └── particles.cpp      # Particle system
-├── ui/
-│   ├── hud.cpp            # In-game HUD (health, coins, stars)
-│   └── menus.cpp          # Title, file select, star select, pause
-├── audio/
-│   └── audioManager.cpp   # SFX and music playback via raudio
-└── save/
-    └── saveData.cpp       # Save/load game state
+├── gameLayer.cpp      # Entry points, game state machine, input mapping
+├── mario.cpp          # Player movement, state machine, camera
+├── world.cpp          # Level loading, collision, entities
+├── renderer3d.cpp     # 3D rendering pipeline, mesh loading
+└── audio.cpp          # SFX and music playback
 
 include/gameLayer/
 └── (matching headers)
 ```
-
-**Decision needed:** This is a flat directory approach. An alternative is fewer files with more code per file during early phases, splitting later. Which do you prefer?
 
 ---
 
@@ -46,7 +26,7 @@ include/gameLayer/
 
 The platform layer already calls `gameLogic(float deltaTime, ...)`. We add a top-level `GameState` enum (TITLE_SCREEN, FILE_SELECT, GAMEPLAY, PAUSE, QUIT) and switch on it each frame to route to the appropriate update/render functions.
 
-**Decision needed:** Fixed timestep vs variable? For a platformer with precise physics, a fixed timestep (1/60s) with an accumulator and render interpolation is more reliable than raw `deltaTime`. Fixed timestep is the recommendation — your call.
+Physics (movement, gravity, friction, collision) runs on a fixed timestep (1/60s) with an accumulator. Timers, animation, and rendering use variable `deltaTime`.
 
 ---
 
@@ -54,7 +34,7 @@ The platform layer already calls `gameLogic(float deltaTime, ...)`. We add a top
 
 Map raw `platform::Input` into a `GameActions` struct with semantic fields: move direction (vec2, normalized), move strength (0–1, analog-aware), and booleans for jump, jumpHeld, attack, crouch, crouchHeld, interact, pause, camera controls. Gamepad sticks provide analog strength; keyboard is always 1.0.
 
-**Decision needed:** The platform layer tracks mouse position but not deltas. Should we add delta tracking to the platform layer, or compute deltas ourselves from frame-to-frame position? Recommendation: compute in game layer to avoid modifying platform code.
+Mouse deltas for camera control are computed in the game layer by storing last frame's mouse position and subtracting — no platform layer changes needed.
 
 ---
 
@@ -178,9 +158,6 @@ Raw struct serialization via the existing `platform::writeEntireFile` / `platfor
 
 | # | Decision | Options | Recommendation |
 |---|----------|---------|----------------|
-| 1 | File structure | Many small files vs fewer larger files | Start with fewer files, split when they get large |
-| 2 | Timestep | Variable (`deltaTime`) vs fixed (1/60s accumulator) | Fixed timestep — critical for consistent platformer physics |
-| 3 | Mouse delta | Add to platform layer vs compute in game layer | Compute in game layer (avoid modifying platform code) |
 | 4 | Model loading | tinyobjloader vs custom OBJ parser vs custom binary | tinyobjloader (header-only, reliable) |
 | 5 | Textures | Vertex colors only vs textures from day one | Start vertex colors, add textures in Phase 3+ |
 | 6 | Entity system | Union struct vs inheritance vs components | Union struct — simple, fast, good enough for ~20 types |

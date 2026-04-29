@@ -6,3 +6,4 @@ Dependencies:
 - [Dear ImGui v1.92.7-docking](https://github.com/ocornut/imgui/releases/tag/v1.92.7-docking)
 - [raudio](https://github.com/raysan5/raudio)
 - [stb_truetype 1.26](https://github.com/nothings/stb/blob/master/stb_truetype.h)
+- [cgltf v1.15](https://github.com/jkuhlmann/cgltf/releases/tag/v1.15)

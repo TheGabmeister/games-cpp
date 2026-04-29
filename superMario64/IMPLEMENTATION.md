@@ -69,22 +69,13 @@ Models use glTF/GLB format (supports static meshes and skeletal animation in one
 
 ## Shader Approach
 
-A single "basic" shader handles most rendering: vertex inputs are position, normal, and color; uniforms are model/view/projection matrices plus light direction and ambient color. Output is simple directional diffuse lighting. Add shader variants later as needed.
-
-Start with vertex colors only. Add texture support in Phase 3+.
+Start with a single basic shader (vertex color + directional light + ambient). Add separate shaders as needed when new rendering features demand them (water, transparency, particles, textures, etc.). Vertex colors only to start; add texture support in Phase 3+.
 
 ---
 
 ## Entity System
 
-No full ECS. A flat `Entity` struct with a type enum, common fields (position, velocity, collider, AI state, model pointer), and a union for type-specific data (star ID, fuse timer, shell state, boss hit count). Update and render are dispatched by type.
-
-**Decision needed:** The union approach is simple but limited. Alternatives:
-- **Separate structs per enemy type** inheriting from a base — more type-safe, more boilerplate.
-- **Component bags** (not full ECS, just optional components) — flexible, more indirection.
-- **Keep the union** and extend as needed — fast, simple, good enough for ~20 types.
-
-Recommendation: union/flat struct for this project size.
+Hybrid inheritance + components. A base `Entity` class holds shared fields (position, velocity, collider, active flag) and virtual `update()`/`render()`. Each entity type is a subclass (Goomba, BobOmb, Star, etc.) with its own logic. Optional reusable components (Physics, AI, Health, Animator) are attached per-entity — the base `update()` ticks attached components, then the subclass runs its specific logic. This avoids deep inheritance hierarchies while keeping entity types readable as single classes. Components are reusable across projects.
 
 ---
 
@@ -98,18 +89,13 @@ An enum of ~30 states (idle, walking, running, crouch, all jump variants, combat
 
 Three separate checks each frame: ground (downward ray/sphere to find floor height and surface type), walls (horizontal sweep for obstruction and sliding), and ceiling (upward check). The collision mesh is a list of triangles, each tagged with a surface type and layer bits. A spatial acceleration structure keeps queries fast.
 
-**Decision needed:** Spatial partitioning:
-- **Uniform grid** — simplest, fast for evenly distributed geometry, wastes memory on sparse levels.
-- **BVH** — best general-purpose, more complex to build.
-- **Octree** — good middle ground.
-
-Recommendation: uniform grid to start, switch to BVH if perf is an issue.
+Collision mesh uses a uniform grid for spatial partitioning — divide the level into equal-sized cells, each storing its triangles. Query only the cells near Mario. Simple and sufficient for our level sizes.
 
 ---
 
 ## Level Loading
 
-Each course has a visual mesh (OBJ), a separate collision mesh (simplified, surface-typed triangles), and an object placement file listing all spawns with type, position, and optional fields (patrol path, star filter, linked star ID, condition). Course metadata (name, star names, sky color, music track) is stored alongside or in a master course list. Early phases can hardcode everything; file-based loading comes in Phase 3+.
+Each course has a visual mesh (glTF/GLB), a separate collision mesh (simplified, surface-typed triangles), and an object placement file listing all spawns with type, position, and optional fields (patrol path, star filter, linked star ID, condition). Course metadata (name, star names, sky color, music track) is stored alongside or in a master course list. Early phases can hardcode everything; file-based loading comes in Phase 3+.
 
 Object placement data parsed with nlohmann/json (vendored in `thirdparty/nlohmann_json/`).
 
@@ -125,6 +111,10 @@ Orbit camera that tracks Mario at chest height. Player controls orbit angle and 
 
 Thin wrapper around raudio. Music: one track playing at a time, crossfade on area transitions (~1s). SFX: preloaded WAV array indexed by enum, fire-and-forget playback. OGG for music (smaller files), WAV for SFX (no decode latency). Underwater sections apply a low-pass filter or swap to a muffled track variant. Cap expiry warning beeps during the last 5 seconds. Footstep SFX frequency scales with movement speed.
 
+### SFX Generation
+
+SFX are generated via Python scripts in `tools/sfx/` using numpy (waveform synthesis) and scipy (WAV export, filters). Each sound type is a parameterized function — pitch, duration, envelope, layering — so sounds are reproducible and tunable. Output WAV files go to `resources/sfx/`.
+
 ---
 
 ## Save System
@@ -136,18 +126,8 @@ Raw struct serialization via the existing `platform::writeEntireFile` / `platfor
 ## Build Changes
 
 - Window size: change default from 500x500 to 1200x900 in `glfwMain.cpp`.
-- New thirdparty headers (tinyobjloader, nlohmann/json) added to `thirdparty/`.
+- New thirdparty headers (cgltf, nlohmann/json) added to `thirdparty/`.
 - Shader files go in `resources/shaders/` (copied by the existing post-build step).
-
----
-
-## Open Decisions Summary
-
-| # | Decision | Options | Recommendation |
-|---|----------|---------|----------------|
-| 6 | Entity system | Union struct vs inheritance vs components | Union struct — simple, fast, good enough for ~20 types |
-| 7 | Spatial partitioning | Uniform grid vs BVH vs octree | Uniform grid to start, BVH if needed |
-| 9 | Shaders | Single uber-shader vs per-material shaders | Single basic shader to start, add variants as needed |
 
 ---
 

@@ -12,7 +12,9 @@
       "Bash(cmake --build build --config Debug)",
       "WebSearch",
       "Bash(curl -s \"https://www.mariowiki.com/Super_Mario_64\")",
-      "Bash(curl -s \"https://ukikipedia.net/wiki/Movement\")"
+      "Bash(curl -s \"https://ukikipedia.net/wiki/Movement\")",
+      "Bash(python -c \"import numpy; print\\('numpy', numpy.__version__\\)\")",
+      "Bash(python -c \"import scipy; print\\('scipy', scipy.__version__\\)\")"
     ]
   }
 }

@@ -187,13 +187,39 @@ ImGui docking windows, debug builds only (`DEVELOPLEMT_BUILD`). Game viewport st
 
 ## Implementation Priority
 
-For incremental development, implement in this order:
+For incremental development, implement in this order. Each phase produces a testable build.
 
-1. **Phase 1 — Core Movement:** Mario controller with full movement set on a flat test level. Camera system.
-2. **Phase 2 — Physics:** Slopes, gravity, ledge grabs, wall jumps, swimming. Health system.
-3. **Phase 3 — First Course:** Bob-omb Battlefield with Goombas, Bob-ombs, King Bob-omb boss, 7 stars.
-4. **Phase 4 — Hub World:** Peach's Castle exterior + first floor interior. Star doors, course entry via paintings.
-5. **Phase 5 — Bowser Fight:** Bowser in the Dark World level + boss arena.
-6. **Phase 6 — Additional Courses:** Build out remaining courses incrementally.
-7. **Phase 7 — Cap Power-Ups:** Wing, Metal, Vanish caps and their secret stages.
-8. **Phase 8 — Polish:** Save system, lives/game-over flow, remaining secret stars, title screen.
+### Foundation (Phases 1–2)
+
+1. **Phase 1 — Rendering Foundation & Debug Tools:** 3D rendering pipeline (vertex-color shader, perspective projection, view matrix). glTF/GLB mesh loading via cgltf. Flat test level with placeholder geometry. Window set to 1200×900. ImGui debug overlay: FPS counter, grid/axis overlay, free-fly camera.
+2. **Phase 2 — Mario Ground Movement & Camera:** Input abstraction (`GameInput` struct). Mario model (Blender-generated). Walk/run/idle/skid on flat ground with analog speed. Single jump with variable height. Gravity + ground detection (downward raycast). Orbit camera with player-controlled rotation and pitch, smooth follow, auto-center.
+
+### Core Mechanics (Phases 3–7)
+
+3. **Phase 3 — Full Movement Set & Animation:** All jump variants (double, triple, long, backflip, side somersault). Crouch, crawl. Punch combo, kick, dive, slide kick. Jump buffering + coyote time. Skeletal animation system driven by the state machine (~30 states). Mario animations from Blender.
+4. **Phase 4 — World Collision & Physics:** Collision mesh loading (separate simplified glTF per level). Uniform-grid spatial partition. Wall detection + sliding. Ceiling detection + head bonk. Slope behavior (walkable < 30°, steep 30–50°, wall > 50°). Surface types (normal, ice). Step-up tolerance for small ledges.
+5. **Phase 5 — Advanced Movement & Interactions:** Wall jump. Ledge grab + climb. Pole/tree climbing. Object carrying + throwing. Platform types: moving (Mario inherits velocity), falling (delay + respawn), tilting, one-way, breakable (ground pound).
+6. **Phase 6 — Health, Damage & HUD:** 8-segment power meter. Damage from contact/hazards (1–3 segments). Knockback impulse + invincibility frames. Fall damage threshold. Void/pit instant death. Coins (yellow/red/blue) as collectibles + healing. Spinning Heart. HUD overlay via gl2d: health, coin counter, star counter, lives.
+7. **Phase 7 — Swimming & Water:** Surface swimming (A to paddle). Underwater free movement (A for burst, stick for pitch/yaw). Reduced underwater gravity. Air meter (health meter drains ~1 segment per 4s). Air replenished by coins or surfacing. Drowning death. Water plane rendering (transparent quad). Camera: looser underwater follow, expanded pitch range.
+
+### First Playable Loop (Phases 8–12)
+
+8. **Phase 8 — Entity System & Core Enemies:** Base `Entity` class with optional reusable components (Physics, AI, Health, Animator). Spawn/despawn by distance. AI behaviors: patrol (back-and-forth or loop), detection radius, chase (direct movement toward Mario), terrain-edge respect. Implement: Goomba (patrol → charge → squished), Bob-omb (patrol → chase → explode; grabbable from behind), Koopa Troopa (patrol → flee; shell drop), Boo (approach when Mario's back is turned, intangible when faced). Generic defeat → coin drop.
+9. **Phase 9 — Audio System:** Thin raudio wrapper: one music stream (OGG, crossfade on transitions), SFX array (WAV, fire-and-forget). Generate initial SFX via Python scripts (movement: footsteps, jumps, land; combat: punch, kick, hit; collectibles: coin, star appear). Generate first music tracks via Python/MIDI pipeline (overworld, boss fight). Hook SFX into existing movement and combat code. Footstep frequency scales with speed.
+10. **Phase 10 — Bob-omb Battlefield (First Playable Course):** Level geometry + collision mesh from Blender script. Object placement via JSON. All 7 stars: King Bob-omb boss (grab from behind, throw 3×, must stay on summit), red coins, 100-coin star, Chain Chomp (ground-pound post to free), cannon (Bob-omb Buddy NPC unlocks, aim-and-launch UI), remaining mission stars. Star select screen on course entry. Course exit on star collection.
+11. **Phase 11 — Hub World: Peach's Castle:** Castle exterior (grounds, moat, courtyard) + interior (first floor, basement structure, second floor locked). Star doors (gated by star count: 1, 3, 8, 12, 30, 50, 70). Painting portals → star select → course load. Toad NPCs (dialog on interact). Regular doors. Basement accessible after Phase 12. Second floor accessible after Phase 14.
+12. **Phase 12 — Bowser in the Dark World:** Linear obstacle-course level (platforms, flames, moving hazards). Bowser boss arena: circular platform with 5 spiked bombs. Grab-spin-throw mechanic (stick rotation builds angular momentum, release direction matters). Bowser AI: fire breath (arc toward Mario), charge (sidestep window). 1 hit to defeat. Reward: basement key.
+
+### Course Expansion (Phases 13–18)
+
+13. **Phase 13 — Courses 2–5:** Whomp's Fortress (Whomps, Whomp King boss, Thwomps, Piranha Plants, poles). Jolly Roger Bay (underwater exploration, Unagi eel, sunken ship). Cool, Cool Mountain (ice surface physics, slide course, penguin race/escort). Big Boo's Haunt (Boo mechanics, Big Boo boss, Mr. I). Each course: Blender geometry, collision mesh, 7 stars, course-specific enemies.
+14. **Phase 14 — Bowser in the Fire Sea:** Second Bowser level (lava hazards, tilting platforms). Bowser adds ground-pound shockwave (expanding ring, jump to dodge). Faster movement. Arena tilts after taking damage. 1 hit. Reward: second floor key. Unlocks castle second floor and upper courses.
+15. **Phase 15 — Courses 6–9:** Hazy Maze Cave (underground, Dorrie, toxic maze). Lethal Lava Land (lava surface type, Bully/Big Bully boss, rolling log). Shifting Sand Land (desert, pyramid interior, Eyerok boss, Pokey, quicksand surfaces). Dire, Dire Docks (underwater dock, submarine, poles). Course-specific enemies: Bully, Eyerok, Pokey, Monty Mole, Dorrie. Heave-Ho.
+16. **Phase 16 — Cap Power-Ups & Secret Stages:** Wing Cap (flight on triple jump/cannon: stick up = dive, stick down = climb; 60s duration). Metal Cap (invulnerable, heavy, walk underwater with infinite air; 20s). Vanish Cap (semi-transparent, pass through specific walls/grates/enemies; 20s). Three cap switch stages (accessed from castle hub). Cap blocks in courses (only dispense after switch pressed). Combined caps where applicable.
+17. **Phase 17 — Courses 10–15:** Snowman's Land (giant snowman, wind zone surface type, ice). Wet-Dry World (water level manipulation mechanic). Tall, Tall Mountain (vertical course, Fly Guy, Ukiki). Tiny-Huge Island (scale-switching between tiny and huge versions). Tick Tock Clock (moving gears/platforms synced to clock time on entry). Rainbow Ride (magic carpet ride, floating platforms). Enemies: Fly Guy, Amp, Lakitu, Spiny, Wiggler boss.
+18. **Phase 18 — Bowser in the Sky:** Final Bowser level (longest obstacle course, all hazard types). Bowser uses all attacks: fire breath, charge, ground-pound shockwave, fire rain (fireballs from sky with shadow indicators). 3 hits to defeat. After hit 2, arena outer edge crumbles to star shape (fewer bombs, smaller arena). Third throw needs more spin momentum. Reward: Grand Star → ending sequence.
+
+### Game Flow & Polish (Phases 19–20)
+
+19. **Phase 19 — Menus, Save System & Game Flow:** Title screen (castle background, "Press Start", idle demo optional). File select (4 slots, star count display, new/continue/copy/delete). Pause menu (continue/exit course). Game Over screen (continue → file select, quit → title). Save system: raw struct serialization (`save_N.dat`), magic number + version field, saves on star collection + course exit. Lives system: start at 4, 1-Up mushrooms, extra lives from coins (50 + 100), Game Over at 0.
+20. **Phase 20 — Polish & Completion:** Secret courses: Princess's Secret Slide, The Secret Aquarium, Wing Mario Over the Rainbow, Cavern of the Metal Cap, Vanish Cap Under the Moat. Castle secret stars: MIPS the rabbit (2 stars at different star counts), Toad gifts, hidden slide stars. Ending sequence: Bowser defeated cutscene, Peach rescued, cake scene. 120-star bonus: Yoshi on castle rooftop (99 lives + message). Remaining SFX/music/jingles. Final tuning pass on movement parameters.

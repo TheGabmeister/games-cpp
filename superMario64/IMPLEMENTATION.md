@@ -267,25 +267,25 @@ Replace the 2D rectangle demo with a 3D test scene. 1200×900 window, vertex-col
 ### Test Checklist
 
 **Rendering:**
-- [ ] Window opens at 1200×900, sky blue background, title "Super Mario 64"
-- [ ] Ground plane visible at floor level, all 5 cubes at correct positions with correct colors
-- [ ] Directional lighting visible (lit vs shadowed faces), ambient prevents pure-black faces
-- [ ] Depth testing works (near objects occlude far), no inside-faces visible (back-face culling)
+- [x] Window opens at 1200×900, sky blue background, title "Super Mario 64"
+- [x] Ground plane visible at floor level, all 5 cubes at correct positions with correct colors
+- [x] Directional lighting visible (lit vs shadowed faces), ambient prevents pure-black faces
+- [x] Depth testing works (near objects occlude far), no inside-faces visible (back-face culling)
 
 **glTF:**
-- [ ] `blender --background --python tools/models/test_scene.py` runs without errors
-- [ ] Test model renders with correct vertex colors and geometry, lighting looks right
+- [x] `blender --background --python tools/models/test_scene.py` runs without errors
+- [x] Test model renders with correct vertex colors and geometry, lighting looks right
 
 **Camera:**
-- [ ] F2 toggles fly camera on/off (cursor hides/shows)
-- [ ] WASD moves relative to view direction, mouse rotates view, no gimbal lock at steep pitch
-- [ ] Scene visible on startup without needing to move
+- [x] F2 toggles fly camera on/off (cursor hides/shows)
+- [x] WASD moves relative to view direction, mouse rotates view, no gimbal lock at steep pitch
+- [x] Scene visible on startup without needing to move
 
 **Debug overlays:**
-- [ ] Grid visible on ground, axis lines at origin (red=X, green=Y, blue=Z)
-- [ ] F1 toggles all debug UI, FPS counter works, camera info updates live
+- [x] Grid visible on ground, axis lines at origin (red=X, green=Y, blue=Z)
+- [x] F1 toggles all debug UI, FPS counter works, camera info updates live
 
 **Edge cases:**
-- [ ] Window resize updates viewport and aspect ratio correctly
-- [ ] Alt-tab and return doesn't break rendering
-- [ ] gl2d initializes without errors (even though unused)
+- [x] Window resize updates viewport and aspect ratio correctly
+- [x] Alt-tab and return doesn't break rendering
+- [x] gl2d initializes without errors (even though unused)

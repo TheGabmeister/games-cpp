@@ -16,7 +16,11 @@
       "Bash(python -c \"import numpy; print\\('numpy', numpy.__version__\\)\")",
       "Bash(python -c \"import scipy; print\\('scipy', scipy.__version__\\)\")",
       "Bash(python -c \"import midiutil; print\\('midiutil', midiutil.__version__\\)\")",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(timeout 5 ./mygame.exe)",
+      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/test_scene.py)",
+      "Bash(timeout 3 ./mygame.exe)",
+      "Bash(echo \"Exit code: $?\")"
     ]
   }
 }

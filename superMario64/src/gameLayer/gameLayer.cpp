@@ -5,112 +5,148 @@
 #include <glm/gtx/transform.hpp>
 #include "platformInput.h"
 #include "imgui.h"
-#include <iostream>
-#include <sstream>
-#include "imfilebrowser.h"
 #include <gl2d/gl2d.h>
 #include <platformTools.h>
-#include <IconsForkAwesome.h>
-#include <imguiTools.h>
 #include <logs.h>
 
-struct GameData
-{
-	glm::vec2 rectPos = {100,100};
+#include "renderer3d.h"
 
-}gameData;
+gl2d::Renderer2D renderer2d;
 
-gl2d::Renderer2D renderer;
+Shader basicShader;
+Shader lineShader;
+FlyCamera camera;
+
+Mesh groundPlane;
+Mesh cubes[5];
+Mesh testModel;
+bool testModelLoaded = false;
+
+LineMesh gridMesh;
+LineMesh axisMesh;
+
+bool showGrid = true;
+bool showAxes = true;
+bool showDebugUI = true;
+
+static const glm::vec3 cubePositions[5] = {
+	{0.f, 0.5f, 0.f},
+	{5.f, 0.5f, 0.f},
+	{-5.f, 0.5f, 0.f},
+	{0.f, 0.5f, 5.f},
+	{0.f, 0.5f, -5.f},
+};
+
+static const glm::vec3 cubeColors[5] = {
+	{1.f, 1.f, 1.f},
+	{1.f, 0.2f, 0.2f},
+	{0.5f, 0.1f, 0.1f},
+	{0.2f, 0.2f, 1.f},
+	{0.1f, 0.1f, 0.5f},
+};
 
 bool initGame()
 {
-	//initializing stuff for the renderer
 	gl2d::init();
-	renderer.create();
+	renderer2d.create();
 
-	//loading the saved data. Loading an entire structure like this makes savind game data very easy.
-	platform::readEntireFile(RESOURCES_PATH "gameData.data", &gameData, sizeof(GameData));
+	basicShader = loadShader(RESOURCES_PATH "shaders/basic3d.vert", RESOURCES_PATH "shaders/basic3d.frag");
+	lineShader = loadShader(RESOURCES_PATH "shaders/debug_line.vert", RESOURCES_PATH "shaders/debug_line.frag");
 
-	platform::log("Init");
+	groundPlane = createGroundPlane(50.f, {0.2f, 0.5f, 0.2f});
+	for (int i = 0; i < 5; i++)
+		cubes[i] = createCube(cubeColors[i]);
 
+	testModel = loadGLB(RESOURCES_PATH "models/test_scene.glb");
+	testModelLoaded = (testModel.vao != 0);
+
+	gridMesh = createGridMesh(50.f, 1.f);
+	axisMesh = createAxisMesh(5.f);
+
+	camera.position = {0.f, 3.f, 10.f};
+	camera.yaw = -90.f;
+	camera.pitch = -15.f;
+
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_BACK);
+
+	platform::log("Phase 1 init complete");
 	return true;
 }
-
-
-//IMPORTANT NOTICE, IF YOU WANT TO SHIP THE GAME TO ANOTHER PC READ THE README.MD IN THE GITHUB
-//https://github.com/meemknight/cmakeSetup
 
 bool gameLogic(float deltaTime, platform::Input &input)
 {
-#pragma region init stuff
-	int w = 0; int h = 0;
-	w = platform::getFrameBufferSizeX(); //window w
-	h = platform::getFrameBufferSizeY(); //window h
-	
+	int w = platform::getFrameBufferSizeX();
+	int h = platform::getFrameBufferSizeY();
+
 	glViewport(0, 0, w, h);
-	glClear(GL_COLOR_BUFFER_BIT); //clear screen
+	glClearColor(0.4f, 0.6f, 0.9f, 1.0f);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	renderer.updateWindowMetrics(w, h);
-#pragma endregion
-
-	//you can also do platform::isButtonHeld(platform::Button::Left)
-
-	if (input.isButtonHeld(platform::Button::Left))
+	// Toggle keys: 1 = debug UI, 2 = fly camera
+	if (input.isButtonPressed(platform::Button::NR1))
+		showDebugUI = !showDebugUI;
+	if (input.isButtonPressed(platform::Button::NR2))
 	{
-		gameData.rectPos.x -= deltaTime * 100;
-	}
-	if (input.isButtonHeld(platform::Button::Right))
-	{
-		gameData.rectPos.x += deltaTime * 100;
-	}
-	if (input.isButtonHeld(platform::Button::Up))
-	{
-		gameData.rectPos.y -= deltaTime * 100;
-	}
-	if (input.isButtonHeld(platform::Button::Down))
-	{
-		gameData.rectPos.y += deltaTime * 100;
+		camera.active = !camera.active;
+		platform::showMouse(!camera.active);
 	}
 
-	gameData.rectPos = glm::clamp(gameData.rectPos, glm::vec2{0,0}, glm::vec2{w - 100,h - 100});
-	renderer.renderRectangle({gameData.rectPos, 100, 100}, Colors_Blue);
+	camera.update(input, deltaTime);
 
-	renderer.flush();
+	float aspect = (h > 0) ? (float)w / (float)h : 1.f;
+	glm::mat4 vp = camera.getProjectionMatrix(aspect) * camera.getViewMatrix();
 
+	// Render solid geometry
+	renderMesh(basicShader, groundPlane, glm::mat4(1.f), vp);
+	for (int i = 0; i < 5; i++)
+		renderMesh(basicShader, cubes[i], glm::translate(cubePositions[i]), vp);
+	if (testModelLoaded)
+		renderMesh(basicShader, testModel, glm::mat4(1.f), vp);
 
-	//ImGui::ShowDemoWindow();
-	ImGui::PushMakeWindowNotTransparent();
-	ImGui::Begin("Test Imgui");
+	// Debug overlays
+	glLineWidth(2.f);
+	if (showGrid) renderLines(lineShader, gridMesh, vp);
+	if (showAxes) renderLines(lineShader, axisMesh, vp);
+	glLineWidth(1.f);
 
-	ImGui::DragFloat2("Positions", &gameData.rectPos[0]);
-
-	ImGui::Text("Emoji moment: " ICON_FK_AMBULANCE);
-
-	ImGui::helpMarker("test");
-
-	ImGui::addErrorSymbol();
-	ImGui::addWarningSymbol();
-
-	ImGui::BeginChildFrameColoured(1, Colors_Gray, {100,100}, 0);
-
-	ImGui::Text("Test");
-
-	ImGui::EndChild();
-
-
-	ImGui::PopMakeWindowNotTransparent();
-	ImGui::End();
+	// ImGui
+	if (showDebugUI)
+	{
+		ImGui::Begin("Debug");
+		ImGui::Text("%.1f FPS (%.2f ms)", 1.f / deltaTime, deltaTime * 1000.f);
+		ImGui::Separator();
+		ImGui::Text("Camera: (%.1f, %.1f, %.1f)", camera.position.x, camera.position.y, camera.position.z);
+		ImGui::Text("Yaw: %.1f  Pitch: %.1f", camera.yaw, camera.pitch);
+		ImGui::SliderFloat("Speed", &camera.speed, 1.f, 50.f);
+		ImGui::SliderFloat("Sensitivity", &camera.sensitivity, 0.01f, 0.5f);
+		ImGui::Separator();
+		ImGui::Checkbox("Grid", &showGrid);
+		ImGui::SameLine();
+		ImGui::Checkbox("Axes", &showAxes);
+		ImGui::Separator();
+		ImGui::Text("Press 1: toggle debug UI");
+		ImGui::Text("Press 2: toggle fly camera (%s)", camera.active ? "ON" : "OFF");
+		if (ImGui::Button("Reset Camera"))
+		{
+			camera.position = {0.f, 3.f, 10.f};
+			camera.yaw = -90.f;
+			camera.pitch = -15.f;
+		}
+		ImGui::End();
+	}
 
 	return true;
-#pragma endregion
-
 }
 
-//This function might not be be called if the program is forced closed
 void closeGame()
 {
-
-	//saved the data.
-	platform::writeEntireFile(RESOURCES_PATH "gameData.data", &gameData, sizeof(GameData));
-
+	destroyMesh(groundPlane);
+	for (auto &c : cubes) destroyMesh(c);
+	if (testModelLoaded) destroyMesh(testModel);
+	destroyLineMesh(gridMesh);
+	destroyLineMesh(axisMesh);
+	destroyShader(basicShader);
+	destroyShader(lineShader);
 }

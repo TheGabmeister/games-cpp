@@ -38,13 +38,20 @@ New gameplay code goes in the game layer. The platform layer owns the main loop 
 ### Game Layer Files
 
 - `input.h/.cpp` — `GameInput` struct abstracts raw `platform::Input` into semantic actions (moveDir, moveStrength, jump, crouch, attack, cameraDelta). All gameplay code reads `GameInput`, never raw keys. Mouse camera requires right-click hold; gamepad right stick always works.
-- `mario.h/.cpp` — `Mario` struct with position, velocity, facingAngle, state machine (`MarioState` enum). `update()` takes `GameInput` + fixedDt + cameraForward. Ground detection via `GroundResult` (currently a Y=0 stub, designed to swap in real raycasts later).
+- `mario.h/.cpp` — `Mario` struct with position, velocity, facingAngle, 24-state state machine (`MarioState` enum: idle, walk, run, skid, 6 jump variants, ground pound, crouch, crawl, punch combo, kick, dive, slide kick, landing). `update()` dispatches to per-state handler functions. Tracks jump chain count/timer, jump buffer/coyote timers, punch combo step. `enterState()` centralizes on-enter logic and triggers animation clip changes. Ground detection via `GroundResult` (currently a Y=0 stub, designed to swap in real raycasts later).
+- `animation.h/.cpp` — Skeletal animation system. `Skeleton` (bone hierarchy + inverse bind matrices), `AnimClip` (named clip with channels of keyframes), `AnimPose` (per-bone local transforms), `AnimState` (playback state with crossfade blending). Key functions: `sampleClip()`, `blendPoses()`, `computeSkinMatrices()`, `playClip()`, `updateAnimState()`, `evaluateAnimState()`. `MAX_BONES` = 64.
 - `camera.h/.cpp` — `OrbitCamera` (game camera: follows Mario, auto-centers, player-controlled orbit) and `FlyCamera` (debug camera: WASD + mouse). Shared `getProjectionMatrix()`.
-- `renderer.h/.cpp` — `Vertex3D`/`Mesh`/`Shader`/`LineMesh` structs. Shader loading, mesh creation, `loadGLB()` via cgltf (loads first mesh/first primitive only), debug grid/axis generation, render calls.
+- `renderer.h/.cpp` — Static meshes (`Vertex3D`/`Mesh`/`Shader`) and skinned meshes (`SkinnedVertex`/`SkinnedMesh`/`SkinnedModel`/`SkinnedShader`). `loadGLB()` for static meshes (first mesh/first primitive). `loadSkinnedGLB()` reads skeleton, bone weights, and all animation clips from glTF. `renderSkinnedMesh()` uploads bone matrices and draws with GPU skinning. Debug grid/axis via `LineMesh`.
+
+### Shaders
+
+- `basic3d.vert/.frag` — MVP transform, vertex color, directional diffuse + ambient lighting.
+- `skinned.vert/.frag` — Same lighting as basic3d, plus per-vertex bone matrix skinning (4 influences, `u_bones[64]` uniform array).
+- `debug_line.vert/.frag` — Simple passthrough for wireframe overlays.
 
 ### Frame Loop
 
-Physics runs on a fixed timestep (1/60s) with an accumulator in `gameLayer.cpp`. Each fixed tick: map input → `mario.update()`. Each variable frame: `orbitCamera.update()` → render. Key 2 toggles fly camera as a debug override. Key 1 toggles ImGui debug UI.
+Physics runs on a fixed timestep (1/60s) with an accumulator in `gameLayer.cpp`. Each fixed tick: map input → `mario.update()` → `updateAnimState()`. Each variable frame: `orbitCamera.update()` → `evaluateAnimState()` (compute skin matrices) → render. Key 2 toggles fly camera as a debug override. Key 1 toggles ImGui debug UI.
 
 ## Key Compile-Time Macros
 
@@ -70,6 +77,8 @@ Uses Dear ImGui v1.92.7-docking. The `thirdparty/imgui-docking/` directory also 
 - **`platform::log()` takes a plain `const char*`**, not printf format args. Build strings with `std::string` and call `.c_str()`.
 - **`platform::Input` keyboard buttons** are limited to A–Z, 0–9, Space, Enter, Escape, arrows, Ctrl, Tab, Shift, Alt. No function keys (F1–F12). Use number keys for debug toggles.
 - **glad was generated without GL_DEBUG_OUTPUT.** The `errorReporting.cpp` is guarded by `#ifdef GL_DEBUG_OUTPUT` and compiles to no-ops.
+- **`#define GLM_ENABLE_EXPERIMENTAL`** must appear before any GLM experimental headers (e.g. `glm/gtx/transform.hpp`, `glm/gtx/quaternion.hpp`). Every `.cpp` that uses GLM experimental features needs this define at the top, or MSVC will error with `#error "GLM: GLM_GTX_... is an experimental extension"`.
+- **Blender 5.1 glTF export API** does not accept `export_colors` as a keyword argument (changed from earlier versions). Use `export_normals=True` and omit `export_colors`. Vertex colors export by default.
 
 ## Known Benign Warnings
 
@@ -88,7 +97,7 @@ When in doubt: for code one person owns and rarely changes, lean KISS. For inter
 
 ## Asset Pipeline
 
-- **3D models + animations**: Blender 5.1 Python scripts in `tools/models/`. Models built procedurally, exported as glTF/GLB. Output to `resources/models/` (characters, enemies, objects) and `resources/courses/` (level geometry). Run headless: `"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python <script>.py`
+- **3D models + animations**: Blender 5.1 Python scripts in `tools/models/`. Models built procedurally with armatures and keyframed animations, exported as glTF/GLB. Character models (e.g. `mario.py`) create a bone hierarchy, skin the mesh with vertex groups, define animations as NLA tracks, and export with `export_skins=True, export_nla_strips=True`. Static models (e.g. `test_scene.py`) export geometry only. Output to `resources/models/` (characters, enemies, objects) and `resources/courses/` (level geometry). Run headless: `"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python <script>.py`
 - **Sprites**: spritesheets drawn as single SVGs with all frames on a 64px grid, exported as one PNG via Inkscape (`"C:/Program Files/Inkscape/bin/inkscape.exe" player.svg -o player.png -w 256 -h 256` for a 4x4 sheet). One sheet per category (player, enemy type, tiles, items, etc.). Code indexes frames by row/column source rectangle. Store SVG and PNG in `resources/sprites/`.
 - **Sounds**: Python scripts in `tools/sfx/` using numpy + scipy. Each sound is a parameterized function (waveform synthesis, envelopes, filters). Output WAV to `resources/sfx/`.
 - **Music**: Python scripts in `tools/music/` using `midiutil` to generate MIDI. FluidSynth renders with a soundfont to WAV. ffmpeg converts to OGG. Output to `resources/music/`.

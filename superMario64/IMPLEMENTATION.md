@@ -223,3 +223,69 @@ For incremental development, implement in this order. Each phase produces a test
 
 19. **Phase 19 — Menus, Save System & Game Flow:** Title screen (castle background, "Press Start", idle demo optional). File select (4 slots, star count display, new/continue/copy/delete). Pause menu (continue/exit course). Game Over screen (continue → file select, quit → title). Save system: raw struct serialization (`save_N.dat`), magic number + version field, saves on star collection + course exit. Lives system: start at 4, 1-Up mushrooms, extra lives from coins (50 + 100), Game Over at 0.
 20. **Phase 20 — Polish & Completion:** Secret courses: Princess's Secret Slide, The Secret Aquarium, Wing Mario Over the Rainbow, Cavern of the Metal Cap, Vanish Cap Under the Moat. Castle secret stars: MIPS the rabbit (2 stars at different star counts), Toad gifts, hidden slide stars. Ending sequence: Bowser defeated cutscene, Peach rescued, cake scene. 120-star bonus: Yoshi on castle rooftop (99 lives + message). Remaining SFX/music/jingles. Final tuning pass on movement parameters.
+
+---
+
+## Phase 1 Detail — Rendering Foundation & Debug Tools
+
+### Goal
+
+Replace the 2D rectangle demo with a 3D test scene. 1200×900 window, vertex-colored geometry with directional lighting, free-fly debug camera, ImGui overlays. This scene becomes the playground for Phase 2.
+
+### Files
+
+**Create:**
+- `include/gameLayer/renderer3d.h` + `src/gameLayer/renderer3d.cpp` — Structs: `Vertex3D` (position, normal, color), `Mesh` (VAO/VBO/EBO), `Shader` (program + cached uniform locations), `FlyCamera` (position, yaw, pitch). Functions: shader loading, mesh creation/destruction, `loadGLB()` via cgltf, debug grid/axis generation, render calls.
+- `resources/shaders/basic3d.vert` + `basic3d.frag` — Vertex color + directional light + ambient. Vertex inputs: position (loc 0), normal (loc 1), color (loc 2). Uniforms: MVP, model matrix, light direction, ambient strength.
+- `resources/shaders/debug_line.vert` + `debug_line.frag` — Unlit colored lines. Vertex inputs: position (loc 0), color (loc 1). Uniform: VP matrix.
+- `tools/models/test_scene.py` — Blender script: vertex-colored ramp + cylinder + stepped platform → `resources/models/test_scene.glb`. Validates the Blender→GLB→engine pipeline.
+
+**Modify:**
+- `glfwMain.cpp` — Window size 500×500 → 1200×900, title `"geam"` → `"Super Mario 64"`.
+- `gameLayer.cpp` — Replace rectangle demo. Keep gl2d init for future HUD. Add: load shaders, build hardcoded test geometry, load test GLB, enable depth test + back-face culling, render loop, ImGui debug windows.
+
+### Key Decisions
+
+- **Hardcoded test geometry first, then glTF.** Ground plane (50×50, dark green) + 5 colored cubes at known positions (white at origin, red/dark-red on ±X, blue/dark-blue on ±Z). This verifies the pipeline without any file dependency. The Blender GLB is loaded alongside it as a second verification.
+- **Two shaders.** Lit shader for solid geometry, unlit line shader for debug overlays (grid + axes). Don't try to share one shader for both.
+- **FlyCamera** controls: WASD + mouse, toggled by F2. When active, cursor is hidden. Pitch clamped ±89°. Speed adjustable via ImGui slider.
+- **F1 toggles all debug UI** (ImGui windows, grid, axes).
+- **Existing 2D shaders** (`resources/vertex.vert`, `resources/fragment.frag`) are unused by the game — gl2d has its own. Leave them alone.
+- **glTF loading** — Phase 1 only loads the first mesh/first primitive from a GLB. Multi-mesh comes later.
+
+### Steps (in order)
+
+1. Window size + title change in `glfwMain.cpp`.
+2. Write the 4 shader files.
+3. `renderer3d.h/.cpp` — shader compile/link, mesh VAO/VBO/EBO creation, render functions.
+4. Hardcoded test geometry (ground plane + 5 cubes). Wire into `gameLayer.cpp` with depth test + culling. Verify rendering.
+5. FlyCamera (WASD + mouse). Verify navigation.
+6. `loadGLB()` via cgltf. Load the Blender test scene. Verify it renders alongside hardcoded geometry.
+7. Debug grid + axis overlays with the line shader.
+8. ImGui debug windows (FPS, camera info, toggles).
+
+### Test Checklist
+
+**Rendering:**
+- [ ] Window opens at 1200×900, sky blue background, title "Super Mario 64"
+- [ ] Ground plane visible at floor level, all 5 cubes at correct positions with correct colors
+- [ ] Directional lighting visible (lit vs shadowed faces), ambient prevents pure-black faces
+- [ ] Depth testing works (near objects occlude far), no inside-faces visible (back-face culling)
+
+**glTF:**
+- [ ] `blender --background --python tools/models/test_scene.py` runs without errors
+- [ ] Test model renders with correct vertex colors and geometry, lighting looks right
+
+**Camera:**
+- [ ] F2 toggles fly camera on/off (cursor hides/shows)
+- [ ] WASD moves relative to view direction, mouse rotates view, no gimbal lock at steep pitch
+- [ ] Scene visible on startup without needing to move
+
+**Debug overlays:**
+- [ ] Grid visible on ground, axis lines at origin (red=X, green=Y, blue=Z)
+- [ ] F1 toggles all debug UI, FPS counter works, camera info updates live
+
+**Edge cases:**
+- [ ] Window resize updates viewport and aspect ratio correctly
+- [ ] Alt-tab and return doesn't break rendering
+- [ ] gl2d initializes without errors (even though unused)

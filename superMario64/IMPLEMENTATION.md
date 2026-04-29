@@ -289,3 +289,78 @@ Replace the 2D rectangle demo with a 3D test scene. 1200×900 window, vertex-col
 - [x] Window resize updates viewport and aspect ratio correctly
 - [x] Alt-tab and return doesn't break rendering
 - [x] gl2d initializes without errors (even though unused)
+
+---
+
+## Phase 2 Detail — Mario Ground Movement & Camera
+
+### Goal
+
+A controllable Mario on the test level. Walk/run with analog speed, skid on direction reversal, single jump with variable height, gravity. Orbit camera that follows Mario. Input abstracted so gameplay code never reads raw keys. Physics on a fixed timestep. By the end, the game feels like a basic 3D platformer on flat ground.
+
+### Files
+
+**Create:**
+- `include/gameLayer/input.h` — `GameInput` struct: `vec2 moveDir` (normalized), `float moveStrength` (0–1), booleans `jump`, `jumpHeld`, `crouch`, `crouchHeld`, `attack`, `interact`, `pause`, `vec2 cameraDir` (right stick / mouse delta), `bool cameraZoom`. Function: `GameInput mapInput(platform::Input&, prevMouseX, prevMouseY)` that reads keyboard/gamepad and fills the struct. Gamepad sticks give analog strength; keyboard is always 1.0.
+- `include/gameLayer/camera.h` + `src/gameLayer/camera.cpp` — `OrbitCamera` (game camera): follows a target point, player-controlled yaw/pitch, smooth lerp, auto-center behind Mario's movement direction. Move `FlyCamera` here from renderer. Both cameras produce a view matrix; `gameLayer.cpp` picks which one is active.
+- `include/gameLayer/mario.h` + `src/gameLayer/mario.cpp` — `Mario` struct: position, velocity, facingAngle, state enum, onGround, jumpHeld tracking. States for Phase 2: `IDLE`, `WALKING`, `RUNNING`, `SKIDDING`, `JUMP_ASCEND`, `FREEFALL`, `LANDING`. Update function takes `GameInput` + `float fixedDt`, returns nothing. Handles movement, state transitions, gravity, ground detection.
+- `tools/models/mario.py` — Blender script: simple vertex-colored humanoid (~1.5 units tall). Red cap + torso, blue overalls/legs, skin-colored face/hands. No armature yet (animation is Phase 3). Export to `resources/models/mario.glb`.
+
+**Modify:**
+- `renderer.h/.cpp` — Remove `FlyCamera` (moved to camera.h). Keep rendering API unchanged.
+- `gameLayer.cpp` — Fixed timestep loop (1/60s accumulator). Each fixed tick: map input → `mario.update()` → `orbitCamera.update()`. Each frame: render Mario mesh at Mario's position + facing rotation, render test level, debug UI.
+
+### Key Decisions
+
+- **Fixed timestep with accumulator.** Physics at 60 Hz. Accumulate `deltaTime`, step in `FIXED_DT = 1/60s` increments. No interpolation for now (vsync at 60 fps matches, and it's simpler). Add interpolation later if jitter is visible.
+- **Ground detection is trivial for Phase 2.** No collision mesh yet (Phase 4). Just check `if (mario.position.y <= 0) → onGround, groundY = 0`. Design the interface so it's easy to swap in real raycasts later: a `GroundResult { bool hit; float groundY; vec3 normal; }` returned by a function we replace in Phase 4.
+- **Orbit camera, not fixed camera.** Player controls horizontal orbit (right stick X / mouse X) and pitch (right stick Y / mouse Y, clamped 10°–70°). Camera sits at `target + spherical offset(yaw, pitch, distance)`. Target = Mario position + `vec3(0, 1.0, 0)` (chest height). Distance default ~8 units. Smooth lerp toward desired position (~8% per frame). Auto-center: when no camera input for ~0.5s, slowly slerp yaw toward Mario's facing direction (~2% per frame).
+- **Mario faces movement direction.** `facingAngle` slerps toward the input direction. At high speed, reversing input triggers SKIDDING (brief deceleration) before turning.
+- **Variable jump height.** Jump applies initial velocity (~22 units/s up). While `jumpHeld` is true and Mario is ascending, gravity is reduced to ~60%. Releasing the button restores full gravity immediately. This gives short hops vs full jumps from the same button.
+- **No animation yet.** Mario model is rendered as a static mesh rotated to face `facingAngle`. Phase 3 adds the animation system and all jump/combat states.
+- **Mouse delta for camera** computed in `mapInput()` by comparing current vs previous mouse position. Store previous position in `gameLayer.cpp`.
+
+### Steps (in order)
+
+1. `input.h` — `GameInput` struct and `mapInput()` function. Wire into `gameLayer.cpp`, verify values with ImGui.
+2. `camera.h/.cpp` — Move `FlyCamera` from renderer. Add `OrbitCamera`. Verify orbit camera follows a fixed point, player can rotate it.
+3. `tools/models/mario.py` — Generate Mario placeholder model. Export GLB, load in engine, render at origin.
+4. `mario.h/.cpp` — Mario struct with position + velocity. Flat ground movement: acceleration, deceleration, max walk/run speed scaled by `moveStrength`. Facing angle. Render Mario mesh at his position.
+5. Add gravity + jump. `JUMP_ASCEND` state with reduced gravity while held, `FREEFALL` when descending or button released. Land when `position.y <= 0`.
+6. Skid state — when input direction opposes velocity at high speed, brief skid before turning.
+7. Connect orbit camera to Mario's position. Auto-center behind facing direction.
+8. ImGui Mario inspector: state name, position, velocity, onGround, facingAngle.
+
+### Test Checklist
+
+**Input:**
+- [x] ImGui shows `GameInput` values updating correctly for keyboard (WASD → direction, space → jump)
+- [x] Gamepad left stick controls move direction + strength (if gamepad available)
+- [x] Camera rotates with mouse movement / right stick
+
+**Movement:**
+- [x] Mario walks when stick/keys are held, stops when released
+- [x] Speed scales with input strength (if analog; keyboard is always full speed)
+- [x] Mario faces the direction he's moving, turning is smooth (not instant snapping)
+- [x] Reversing direction at speed triggers a visible skid before Mario turns around
+- [x] Mario stays on the ground plane (doesn't sink or float)
+
+**Jump:**
+- [x] Pressing jump makes Mario leave the ground with upward velocity
+- [x] Holding jump results in a higher arc than tapping jump
+- [x] Mario falls back down and lands on the ground plane
+- [x] Can't jump while already airborne (single jump only in Phase 2)
+- [x] Horizontal momentum carries into the jump (running jump goes further than standing jump)
+
+**Camera:**
+- [x] Camera follows Mario as he moves, keeping him centered
+- [x] Player can orbit the camera horizontally (full 360°) and adjust pitch (clamped)
+- [x] Camera auto-centers behind Mario when not being manually controlled
+- [x] Camera transition is smooth (no snapping or jitter)
+- [x] Fly camera (key 2) still works as a debug override
+
+**Edge cases:**
+- [x] Mario can't walk off into infinity — stays in the scene (or at least doesn't crash)
+- [x] Rapid jump spam doesn't break state machine
+- [x] Alt-tab during a jump doesn't cause Mario to fly off
+- [x] FPS counter still shows ~60 FPS with Mario moving

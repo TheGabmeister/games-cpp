@@ -3,7 +3,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
-#include <platform/platformInput.h>
 
 struct Vertex3D
 {
@@ -43,25 +42,6 @@ struct LineMesh
 	GLuint vao = 0;
 	GLuint vbo = 0;
 	int vertexCount = 0;
-};
-
-struct FlyCamera
-{
-	glm::vec3 position = {0.f, 3.f, 10.f};
-	float yaw = -90.f;
-	float pitch = -15.f;
-	float speed = 10.f;
-	float sensitivity = 0.1f;
-	bool active = false;
-
-	int lastMouseX = 0;
-	int lastMouseY = 0;
-	bool firstMouse = true;
-
-	glm::mat4 getViewMatrix() const;
-	glm::mat4 getProjectionMatrix(float aspect) const;
-	void update(platform::Input &input, float dt);
-	glm::vec3 getFront() const;
 };
 
 Shader loadShader(const char *vertPath, const char *fragPath);

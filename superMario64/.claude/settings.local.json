@@ -21,7 +21,9 @@
       "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/test_scene.py)",
       "Bash(timeout 3 ./mygame.exe)",
       "Bash(echo \"Exit code: $?\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/mario.py)",
+      "Bash(echo \"Exit: $?\")"
     ]
   }
 }

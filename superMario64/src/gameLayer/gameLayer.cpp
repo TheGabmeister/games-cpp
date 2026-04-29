@@ -44,6 +44,11 @@ LineMesh axisMesh;
 bool showGrid = true;
 bool showAxes = true;
 bool showDebugUI = true;
+bool showAnimDebugger = false;
+bool animViewerMode = false;
+
+static AnimState debugAnimState;
+static bool debugAnimPaused = false;
 
 static constexpr float FIXED_DT = 1.f / 60.f;
 static float accumulator = 0.f;
@@ -127,6 +132,12 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		flyCamera.active = useFlyCam;
 		platform::showMouse(!useFlyCam);
 	}
+	if (input.isButtonPressed(platform::Button::NR4))
+	{
+		animViewerMode = !animViewerMode;
+		if (animViewerMode)
+			showAnimDebugger = true;
+	}
 
 	// Map input
 	if (!useFlyCam && input.hasFocus)
@@ -143,26 +154,45 @@ bool gameLogic(float deltaTime, platform::Input &input)
 
 	while (accumulator >= FIXED_DT)
 	{
-		glm::vec3 camFwd = getOrbitCameraForward();
-		mario.update(currentInput, FIXED_DT, camFwd);
+		if (!animViewerMode)
+		{
+			glm::vec3 camFwd = getOrbitCameraForward();
+			mario.update(currentInput, FIXED_DT, camFwd);
 
-		if (marioModelLoaded)
-			updateAnimState(mario.animState, marioModel.clips, FIXED_DT);
+			if (marioModelLoaded)
+				updateAnimState(mario.animState, marioModel.clips, FIXED_DT);
+		}
+
+		if (showAnimDebugger && marioModelLoaded && !debugAnimPaused && debugAnimState.currentClip >= 0)
+			updateAnimState(debugAnimState, marioModel.clips, FIXED_DT);
 
 		accumulator -= FIXED_DT;
 	}
 
 	// Orbit camera update (runs every frame for smooth following)
 	if (!useFlyCam)
-		orbitCamera.update(currentInput, mario.position, mario.facingAngle, deltaTime);
+	{
+		if (animViewerMode)
+			orbitCamera.update(currentInput, glm::vec3(0.f), 0.f, deltaTime);
+		else
+			orbitCamera.update(currentInput, mario.position, mario.facingAngle, deltaTime);
+	}
 
 	// Evaluate animation for rendering
 	if (marioModelLoaded)
-		evaluateAnimState(mario.animState, marioModel.clips, marioModel.skeleton, marioSkinMatrices);
+	{
+		if (showAnimDebugger && debugAnimState.currentClip >= 0)
+			evaluateAnimState(debugAnimState, marioModel.clips, marioModel.skeleton, marioSkinMatrices);
+		else
+			evaluateAnimState(mario.animState, marioModel.clips, marioModel.skeleton, marioSkinMatrices);
+	}
 
 	// ---- Rendering ----
 	glViewport(0, 0, w, h);
-	glClearColor(0.4f, 0.6f, 0.9f, 1.0f);
+	if (animViewerMode)
+		glClearColor(0.15f, 0.15f, 0.2f, 1.0f);
+	else
+		glClearColor(0.4f, 0.6f, 0.9f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	float aspect = (h > 0) ? (float)w / (float)h : 1.f;
@@ -173,17 +203,24 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		vp = getProjectionMatrix(aspect) * orbitCamera.getViewMatrix();
 
 	// Level geometry
-	renderMesh(basicShader, groundPlane, glm::mat4(1.f), vp);
-	for (int i = 0; i < 5; i++)
-		renderMesh(basicShader, cubes[i], glm::translate(cubePositions[i]), vp);
-	if (testModelLoaded)
-		renderMesh(basicShader, testModel, glm::mat4(1.f), vp);
+	if (!animViewerMode)
+	{
+		renderMesh(basicShader, groundPlane, glm::mat4(1.f), vp);
+		for (int i = 0; i < 5; i++)
+			renderMesh(basicShader, cubes[i], glm::translate(cubePositions[i]), vp);
+		if (testModelLoaded)
+			renderMesh(basicShader, testModel, glm::mat4(1.f), vp);
+	}
 
 	// Mario (skinned)
 	if (marioModelLoaded)
 	{
-		glm::mat4 marioModelMat = glm::translate(mario.position)
-			* glm::rotate(glm::radians(mario.facingAngle + 180.f), glm::vec3(0, 1, 0));
+		glm::mat4 marioModelMat;
+		if (animViewerMode)
+			marioModelMat = glm::mat4(1.f);
+		else
+			marioModelMat = glm::translate(mario.position)
+				* glm::rotate(glm::radians(mario.facingAngle + 180.f), glm::vec3(0, 1, 0));
 		renderSkinnedMesh(skinnedShader, marioModel.mesh, marioModelMat, vp,
 			marioSkinMatrices, (int)marioModel.skeleton.bones.size());
 	}
@@ -195,7 +232,7 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	glLineWidth(1.f);
 
 	// ImGui
-	if (showDebugUI)
+	if (showDebugUI && !animViewerMode)
 	{
 		ImGui::Begin("Debug");
 		ImGui::Text("%.1f FPS (%.2f ms)", 1.f / deltaTime, deltaTime * 1000.f);
@@ -225,12 +262,77 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		ImGui::Checkbox("Axes", &showAxes);
 		ImGui::Text("Press 1: toggle debug UI");
 		ImGui::Text("Press 2: fly camera (%s)", useFlyCam ? "ON" : "OFF");
+		ImGui::Text("Press 4: anim viewer (%s)", animViewerMode ? "ON" : "OFF");
 
 		if (useFlyCam)
 		{
 			ImGui::Separator();
 			ImGui::Text("Fly Cam: (%.1f, %.1f, %.1f)", flyCamera.position.x, flyCamera.position.y, flyCamera.position.z);
 			ImGui::SliderFloat("Speed", &flyCamera.speed, 1.f, 50.f);
+		}
+
+		ImGui::End();
+	}
+
+	if (showAnimDebugger && marioModelLoaded)
+	{
+		ImGui::Begin("Animation Debugger", &showAnimDebugger);
+
+		if (animViewerMode)
+			ImGui::TextColored(ImVec4(0.5f, 1.f, 0.5f, 1.f), "VIEWER MODE (press 4 to exit)");
+
+		const char *currentName = (debugAnimState.currentClip >= 0)
+			? marioModel.clips[debugAnimState.currentClip].name.c_str()
+			: "None";
+		if (ImGui::BeginCombo("Clip", currentName))
+		{
+			for (int i = 0; i < (int)marioModel.clips.size(); i++)
+			{
+				bool selected = (i == debugAnimState.currentClip);
+				if (ImGui::Selectable(marioModel.clips[i].name.c_str(), selected))
+				{
+					playClip(debugAnimState, i, 0.f);
+					debugAnimPaused = false;
+				}
+			}
+			ImGui::EndCombo();
+		}
+
+		if (debugAnimState.currentClip >= 0)
+		{
+			const AnimClip &clip = marioModel.clips[debugAnimState.currentClip];
+
+			if (ImGui::Button(debugAnimPaused ? "Play" : "Pause"))
+				debugAnimPaused = !debugAnimPaused;
+			ImGui::SameLine();
+			if (ImGui::Button("Restart"))
+			{
+				debugAnimState.time = 0.f;
+				debugAnimPaused = false;
+			}
+
+			float t = debugAnimState.time;
+			if (ImGui::SliderFloat("Time", &t, 0.f, clip.duration, "%.3f s"))
+			{
+				debugAnimState.time = t;
+				debugAnimPaused = true;
+			}
+
+			ImGui::SliderFloat("Speed", &debugAnimState.speed, 0.1f, 3.f);
+
+			ImGui::Separator();
+			ImGui::Text("Duration: %.3f s", clip.duration);
+			ImGui::Text("Looping: %s", clip.looping ? "yes" : "no");
+			ImGui::Text("Channels: %d", (int)clip.channels.size());
+		}
+
+		if (ImGui::CollapsingHeader("Bones"))
+		{
+			for (int i = 0; i < (int)marioModel.skeleton.bones.size(); i++)
+			{
+				const Bone &b = marioModel.skeleton.bones[i];
+				ImGui::Text("[%d] %s (parent: %d)", i, b.name.c_str(), b.parentIndex);
+			}
 		}
 
 		ImGui::End();

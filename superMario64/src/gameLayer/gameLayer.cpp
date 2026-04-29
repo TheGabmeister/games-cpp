@@ -14,19 +14,22 @@
 #include "input.h"
 #include "camera.h"
 #include "mario.h"
+#include "animation.h"
 
 gl2d::Renderer2D renderer2d;
 
 Shader basicShader;
 Shader lineShader;
+SkinnedShader skinnedShader;
 
 FlyCamera flyCamera;
 OrbitCamera orbitCamera;
 bool useFlyCam = false;
 
 Mario mario;
-Mesh marioMesh;
-bool marioMeshLoaded = false;
+SkinnedModel marioModel;
+bool marioModelLoaded = false;
+glm::mat4 marioSkinMatrices[MAX_BONES];
 
 InputState inputState;
 
@@ -69,6 +72,7 @@ bool initGame()
 
 	basicShader = loadShader(RESOURCES_PATH "shaders/basic3d.vert", RESOURCES_PATH "shaders/basic3d.frag");
 	lineShader = loadShader(RESOURCES_PATH "shaders/debug_line.vert", RESOURCES_PATH "shaders/debug_line.frag");
+	skinnedShader = loadSkinnedShader(RESOURCES_PATH "shaders/skinned.vert", RESOURCES_PATH "shaders/skinned.frag");
 
 	groundPlane = createGroundPlane(50.f, {0.2f, 0.5f, 0.2f});
 	for (int i = 0; i < 5; i++)
@@ -77,8 +81,14 @@ bool initGame()
 	testModel = loadGLB(RESOURCES_PATH "models/test_scene.glb");
 	testModelLoaded = (testModel.vao != 0);
 
-	marioMesh = loadGLB(RESOURCES_PATH "models/mario.glb");
-	marioMeshLoaded = (marioMesh.vao != 0);
+	marioModel = loadSkinnedGLB(RESOURCES_PATH "models/mario.glb");
+	marioModelLoaded = (marioModel.mesh.vao != 0);
+	if (marioModelLoaded)
+		mario.setAnimClips(marioModel);
+
+	// Initialize skin matrices to identity
+	for (int i = 0; i < MAX_BONES; i++)
+		marioSkinMatrices[i] = glm::mat4(1.f);
 
 	gridMesh = createGridMesh(50.f, 1.f);
 	axisMesh = createAxisMesh(5.f);
@@ -135,12 +145,20 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	{
 		glm::vec3 camFwd = getOrbitCameraForward();
 		mario.update(currentInput, FIXED_DT, camFwd);
+
+		if (marioModelLoaded)
+			updateAnimState(mario.animState, marioModel.clips, FIXED_DT);
+
 		accumulator -= FIXED_DT;
 	}
 
 	// Orbit camera update (runs every frame for smooth following)
 	if (!useFlyCam)
 		orbitCamera.update(currentInput, mario.position, mario.facingAngle, deltaTime);
+
+	// Evaluate animation for rendering
+	if (marioModelLoaded)
+		evaluateAnimState(mario.animState, marioModel.clips, marioModel.skeleton, marioSkinMatrices);
 
 	// ---- Rendering ----
 	glViewport(0, 0, w, h);
@@ -161,12 +179,13 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	if (testModelLoaded)
 		renderMesh(basicShader, testModel, glm::mat4(1.f), vp);
 
-	// Mario
-	if (marioMeshLoaded)
+	// Mario (skinned)
+	if (marioModelLoaded)
 	{
-		glm::mat4 marioModel = glm::translate(mario.position)
+		glm::mat4 marioModelMat = glm::translate(mario.position)
 			* glm::rotate(glm::radians(mario.facingAngle + 180.f), glm::vec3(0, 1, 0));
-		renderMesh(basicShader, marioMesh, marioModel, vp);
+		renderSkinnedMesh(skinnedShader, marioModel.mesh, marioModelMat, vp,
+			marioSkinMatrices, (int)marioModel.skeleton.bones.size());
 	}
 
 	// Debug overlays
@@ -187,10 +206,18 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		glm::vec2 hVel(mario.velocity.x, mario.velocity.z);
 		ImGui::Text("H Speed: %.2f  V Speed: %.2f", glm::length(hVel), mario.velocity.y);
 		ImGui::Text("Facing: %.1f  OnGround: %s", mario.facingAngle, mario.onGround ? "yes" : "no");
+		ImGui::Text("JumpChain: %d  Timer: %.3f", mario.jumpChainCount, mario.jumpChainTimer);
+		ImGui::Text("Buffer: %.3f  Coyote: %.3f", mario.jumpBufferTimer, mario.coyoteTimer);
+		ImGui::Text("Combo: step=%d timer=%.3f", mario.punchComboStep, mario.comboTimer);
+		ImGui::Separator();
+
+		ImGui::Text("Anim: clip=%d time=%.2f blend=%.2f",
+			mario.animState.currentClip, mario.animState.time, mario.animState.blendAlpha);
 		ImGui::Separator();
 
 		ImGui::Text("Input: dir(%.2f,%.2f) str=%.2f", currentInput.moveDir.x, currentInput.moveDir.y, currentInput.moveStrength);
 		ImGui::Text("Jump: %s  Held: %s", currentInput.jump ? "yes" : "no", currentInput.jumpHeld ? "yes" : "no");
+		ImGui::Text("Crouch: %s  Attack: %s", currentInput.crouchHeld ? "yes" : "no", currentInput.attack ? "yes" : "no");
 		ImGui::Separator();
 
 		ImGui::Checkbox("Grid", &showGrid);
@@ -217,9 +244,10 @@ void closeGame()
 	destroyMesh(groundPlane);
 	for (auto &c : cubes) destroyMesh(c);
 	if (testModelLoaded) destroyMesh(testModel);
-	if (marioMeshLoaded) destroyMesh(marioMesh);
+	if (marioModelLoaded) destroySkinnedMesh(marioModel.mesh);
 	destroyLineMesh(gridMesh);
 	destroyLineMesh(axisMesh);
 	destroyShader(basicShader);
 	destroyShader(lineShader);
+	destroySkinnedShader(skinnedShader);
 }

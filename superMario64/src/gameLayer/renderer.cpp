@@ -84,6 +84,54 @@ void destroyShader(Shader &shader)
 	shader = {};
 }
 
+SkinnedShader loadSkinnedShader(const char *vertPath, const char *fragPath)
+{
+	std::string vertSrc = readFile(vertPath);
+	std::string fragSrc = readFile(fragPath);
+	permaAssertComment(!vertSrc.empty(), "Skinned vertex shader file empty or missing");
+	permaAssertComment(!fragSrc.empty(), "Skinned fragment shader file empty or missing");
+
+	GLuint vert = compileShaderStage(vertSrc.c_str(), GL_VERTEX_SHADER);
+	GLuint frag = compileShaderStage(fragSrc.c_str(), GL_FRAGMENT_SHADER);
+
+	SkinnedShader s;
+	s.program = glCreateProgram();
+	glAttachShader(s.program, vert);
+	glAttachShader(s.program, frag);
+	glLinkProgram(s.program);
+
+	GLint success;
+	glGetProgramiv(s.program, GL_LINK_STATUS, &success);
+	if (!success)
+	{
+		char log[512];
+		glGetProgramInfoLog(s.program, sizeof(log), nullptr, log);
+		platform::log((std::string("Skinned shader link error: ") + log).c_str());
+	}
+
+	glDeleteShader(vert);
+	glDeleteShader(frag);
+
+	s.u_mvp = glGetUniformLocation(s.program, "u_mvp");
+	s.u_model = glGetUniformLocation(s.program, "u_model");
+	s.u_lightDir = glGetUniformLocation(s.program, "u_lightDir");
+	s.u_ambientStrength = glGetUniformLocation(s.program, "u_ambientStrength");
+
+	for (int i = 0; i < MAX_BONES; i++)
+	{
+		std::string name = "u_bones[" + std::to_string(i) + "]";
+		s.u_bones[i] = glGetUniformLocation(s.program, name.c_str());
+	}
+
+	return s;
+}
+
+void destroySkinnedShader(SkinnedShader &shader)
+{
+	if (shader.program) glDeleteProgram(shader.program);
+	shader = {};
+}
+
 // ---- Mesh ----
 
 Mesh createMesh(const std::vector<Vertex3D> &vertices, const std::vector<unsigned int> &indices)
@@ -251,6 +299,57 @@ Mesh createCube(glm::vec3 color)
 	return createMesh(verts, indices);
 }
 
+// ---- Skinned Mesh ----
+
+SkinnedMesh createSkinnedMesh(const std::vector<SkinnedVertex> &vertices, const std::vector<unsigned int> &indices)
+{
+	SkinnedMesh m;
+	m.vertexCount = (int)vertices.size();
+	m.indexCount = (int)indices.size();
+	m.indexed = !indices.empty();
+
+	glGenVertexArrays(1, &m.vao);
+	glGenBuffers(1, &m.vbo);
+	glBindVertexArray(m.vao);
+
+	glBindBuffer(GL_ARRAY_BUFFER, m.vbo);
+	glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(SkinnedVertex), vertices.data(), GL_STATIC_DRAW);
+
+	if (m.indexed)
+	{
+		glGenBuffers(1, &m.ebo);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m.ebo);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), indices.data(), GL_STATIC_DRAW);
+	}
+
+	// position
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(SkinnedVertex), (void *)offsetof(SkinnedVertex, position));
+	glEnableVertexAttribArray(0);
+	// normal
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(SkinnedVertex), (void *)offsetof(SkinnedVertex, normal));
+	glEnableVertexAttribArray(1);
+	// color
+	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(SkinnedVertex), (void *)offsetof(SkinnedVertex, color));
+	glEnableVertexAttribArray(2);
+	// bone indices (integer attribute)
+	glVertexAttribIPointer(3, 4, GL_INT, sizeof(SkinnedVertex), (void *)offsetof(SkinnedVertex, boneIndices));
+	glEnableVertexAttribArray(3);
+	// bone weights
+	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(SkinnedVertex), (void *)offsetof(SkinnedVertex, boneWeights));
+	glEnableVertexAttribArray(4);
+
+	glBindVertexArray(0);
+	return m;
+}
+
+void destroySkinnedMesh(SkinnedMesh &mesh)
+{
+	if (mesh.vao) glDeleteVertexArrays(1, &mesh.vao);
+	if (mesh.vbo) glDeleteBuffers(1, &mesh.vbo);
+	if (mesh.ebo) glDeleteBuffers(1, &mesh.ebo);
+	mesh = {};
+}
+
 // ---- glTF Loading ----
 
 Mesh loadGLB(const char *path)
@@ -339,7 +438,285 @@ Mesh loadGLB(const char *path)
 	return m;
 }
 
+// ---- Skinned glTF Loading ----
+
+static int findNodeIndex(cgltf_data *data, cgltf_node *node)
+{
+	for (cgltf_size i = 0; i < data->nodes_count; i++)
+		if (&data->nodes[i] == node) return (int)i;
+	return -1;
+}
+
+static int findJointIndex(cgltf_skin *skin, cgltf_node *node)
+{
+	for (cgltf_size i = 0; i < skin->joints_count; i++)
+		if (skin->joints[i] == node) return (int)i;
+	return -1;
+}
+
+SkinnedModel loadSkinnedGLB(const char *path)
+{
+	SkinnedModel model;
+
+	cgltf_options options = {};
+	cgltf_data *data = nullptr;
+	cgltf_result result = cgltf_parse_file(&options, path, &data);
+	if (result != cgltf_result_success)
+	{
+		platform::log((std::string("Failed to parse skinned glTF: ") + path).c_str());
+		return model;
+	}
+
+	result = cgltf_load_buffers(&options, data, path);
+	if (result != cgltf_result_success)
+	{
+		platform::log((std::string("Failed to load skinned glTF buffers: ") + path).c_str());
+		cgltf_free(data);
+		return model;
+	}
+
+	// Find the mesh node with a skin
+	cgltf_mesh *mesh = nullptr;
+	cgltf_skin *skin = nullptr;
+	for (cgltf_size i = 0; i < data->nodes_count; i++)
+	{
+		if (data->nodes[i].mesh && data->nodes[i].skin)
+		{
+			mesh = data->nodes[i].mesh;
+			skin = data->nodes[i].skin;
+			break;
+		}
+	}
+
+	if (!mesh || mesh->primitives_count == 0)
+	{
+		platform::log((std::string("Skinned glTF has no skinned mesh: ") + path).c_str());
+		cgltf_free(data);
+		return model;
+	}
+
+	if (!skin || skin->joints_count == 0)
+	{
+		platform::log((std::string("Skinned glTF has no skin/joints: ") + path).c_str());
+		cgltf_free(data);
+		return model;
+	}
+
+	// Build skeleton
+	int boneCount = (int)skin->joints_count;
+	model.skeleton.bones.resize(boneCount);
+
+	// Read inverse bind matrices
+	std::vector<glm::mat4> ibms(boneCount, glm::mat4(1.f));
+	if (skin->inverse_bind_matrices)
+	{
+		for (int i = 0; i < boneCount; i++)
+			cgltf_accessor_read_float(skin->inverse_bind_matrices, i, &ibms[i][0][0], 16);
+	}
+
+	for (int i = 0; i < boneCount; i++)
+	{
+		cgltf_node *joint = skin->joints[i];
+		Bone &bone = model.skeleton.bones[i];
+
+		bone.name = joint->name ? joint->name : ("bone_" + std::to_string(i));
+		bone.inverseBindMatrix = ibms[i];
+
+		// Find parent in joint list
+		bone.parentIndex = -1;
+		if (joint->parent)
+			bone.parentIndex = findJointIndex(skin, joint->parent);
+
+		// Bind pose local transform
+		if (joint->has_translation)
+			bone.localPosition = {joint->translation[0], joint->translation[1], joint->translation[2]};
+		if (joint->has_rotation)
+			bone.localRotation = glm::quat(joint->rotation[3], joint->rotation[0], joint->rotation[1], joint->rotation[2]);
+		if (joint->has_scale)
+			bone.localScale = {joint->scale[0], joint->scale[1], joint->scale[2]};
+
+		model.skeleton.boneNameToIndex[bone.name] = i;
+	}
+
+	// Read mesh vertices
+	cgltf_primitive &prim = mesh->primitives[0];
+
+	cgltf_accessor *posAccessor = nullptr;
+	cgltf_accessor *normAccessor = nullptr;
+	cgltf_accessor *colorAccessor = nullptr;
+	cgltf_accessor *jointsAccessor = nullptr;
+	cgltf_accessor *weightsAccessor = nullptr;
+
+	for (cgltf_size i = 0; i < prim.attributes_count; i++)
+	{
+		switch (prim.attributes[i].type)
+		{
+		case cgltf_attribute_type_position: posAccessor = prim.attributes[i].data; break;
+		case cgltf_attribute_type_normal: normAccessor = prim.attributes[i].data; break;
+		case cgltf_attribute_type_color: colorAccessor = prim.attributes[i].data; break;
+		case cgltf_attribute_type_joints: jointsAccessor = prim.attributes[i].data; break;
+		case cgltf_attribute_type_weights: weightsAccessor = prim.attributes[i].data; break;
+		default: break;
+		}
+	}
+
+	if (!posAccessor)
+	{
+		platform::log((std::string("Skinned glTF has no POSITION: ") + path).c_str());
+		cgltf_free(data);
+		return model;
+	}
+
+	size_t vertCount = posAccessor->count;
+	std::vector<SkinnedVertex> vertices(vertCount);
+
+	for (size_t i = 0; i < vertCount; i++)
+	{
+		cgltf_accessor_read_float(posAccessor, i, &vertices[i].position.x, 3);
+
+		if (normAccessor)
+			cgltf_accessor_read_float(normAccessor, i, &vertices[i].normal.x, 3);
+		else
+			vertices[i].normal = {0, 1, 0};
+
+		if (colorAccessor)
+		{
+			float col[4] = {1, 1, 1, 1};
+			cgltf_accessor_read_float(colorAccessor, i, col, colorAccessor->type == cgltf_type_vec4 ? 4 : 3);
+			vertices[i].color = {col[0], col[1], col[2]};
+		}
+		else
+		{
+			vertices[i].color = {1, 1, 1};
+		}
+
+		if (jointsAccessor)
+		{
+			cgltf_uint joints[4] = {0, 0, 0, 0};
+			cgltf_accessor_read_uint(jointsAccessor, i, joints, 4);
+			vertices[i].boneIndices = {(int)joints[0], (int)joints[1], (int)joints[2], (int)joints[3]};
+		}
+
+		if (weightsAccessor)
+		{
+			cgltf_accessor_read_float(weightsAccessor, i, &vertices[i].boneWeights.x, 4);
+		}
+	}
+
+	std::vector<unsigned int> indices;
+	if (prim.indices)
+	{
+		indices.resize(prim.indices->count);
+		for (size_t i = 0; i < prim.indices->count; i++)
+			indices[i] = (unsigned int)cgltf_accessor_read_index(prim.indices, i);
+	}
+
+	model.mesh = createSkinnedMesh(vertices, indices);
+
+	// Read animations
+	for (cgltf_size a = 0; a < data->animations_count; a++)
+	{
+		cgltf_animation &anim = data->animations[a];
+		AnimClip clip;
+		clip.name = anim.name ? anim.name : ("anim_" + std::to_string(a));
+		clip.duration = 0.f;
+		clip.looping = false;
+
+		for (cgltf_size c = 0; c < anim.channels_count; c++)
+		{
+			cgltf_animation_channel &ch = anim.channels[c];
+			if (!ch.target_node) continue;
+
+			int boneIdx = findJointIndex(skin, ch.target_node);
+			if (boneIdx < 0) continue;
+
+			AnimChannel channel;
+			channel.boneIndex = boneIdx;
+
+			switch (ch.target_path)
+			{
+			case cgltf_animation_path_type_translation: channel.path = AnimChannel::Path::TRANSLATION; break;
+			case cgltf_animation_path_type_rotation: channel.path = AnimChannel::Path::ROTATION; break;
+			case cgltf_animation_path_type_scale: channel.path = AnimChannel::Path::SCALE; break;
+			default: continue;
+			}
+
+			cgltf_animation_sampler *sampler = ch.sampler;
+			cgltf_accessor *input = sampler->input;
+			cgltf_accessor *output = sampler->output;
+
+			size_t keyCount = input->count;
+			channel.keyframes.resize(keyCount);
+
+			for (size_t k = 0; k < keyCount; k++)
+			{
+				float t = 0.f;
+				cgltf_accessor_read_float(input, k, &t, 1);
+				channel.keyframes[k].time = t;
+				if (t > clip.duration) clip.duration = t;
+
+				if (channel.path == AnimChannel::Path::ROTATION)
+				{
+					float q[4];
+					cgltf_accessor_read_float(output, k, q, 4);
+					channel.keyframes[k].value4 = glm::quat(q[3], q[0], q[1], q[2]);
+				}
+				else
+				{
+					cgltf_accessor_read_float(output, k, &channel.keyframes[k].value3.x, 3);
+				}
+			}
+
+			clip.channels.push_back(std::move(channel));
+		}
+
+		// Mark looping clips by name convention
+		if (clip.name == "idle" || clip.name == "walk" || clip.name == "run" ||
+		    clip.name == "freefall" || clip.name == "crawl" || clip.name == "belly_slide")
+			clip.looping = true;
+
+		model.clipNameToIndex[clip.name] = (int)model.clips.size();
+		model.clips.push_back(std::move(clip));
+	}
+
+	cgltf_free(data);
+
+	platform::log((std::string("Loaded skinned GLB: ") + path +
+	               " (" + std::to_string(vertCount) + " verts, " +
+	               std::to_string(boneCount) + " bones, " +
+	               std::to_string(model.clips.size()) + " clips)").c_str());
+	return model;
+}
+
 // ---- Rendering ----
+
+void renderSkinnedMesh(const SkinnedShader &shader, const SkinnedMesh &mesh,
+	const glm::mat4 &model, const glm::mat4 &vp,
+	const glm::mat4 *boneMatrices, int boneCount,
+	const glm::vec3 &lightDir, float ambient)
+{
+	glUseProgram(shader.program);
+
+	glm::mat4 mvp = vp * model;
+	if (shader.u_mvp >= 0) glUniformMatrix4fv(shader.u_mvp, 1, GL_FALSE, glm::value_ptr(mvp));
+	if (shader.u_model >= 0) glUniformMatrix4fv(shader.u_model, 1, GL_FALSE, glm::value_ptr(model));
+	if (shader.u_lightDir >= 0) glUniform3fv(shader.u_lightDir, 1, glm::value_ptr(lightDir));
+	if (shader.u_ambientStrength >= 0) glUniform1f(shader.u_ambientStrength, ambient);
+
+	int count = std::min(boneCount, MAX_BONES);
+	for (int i = 0; i < count; i++)
+	{
+		if (shader.u_bones[i] >= 0)
+			glUniformMatrix4fv(shader.u_bones[i], 1, GL_FALSE, glm::value_ptr(boneMatrices[i]));
+	}
+
+	glBindVertexArray(mesh.vao);
+	if (mesh.indexed)
+		glDrawElements(GL_TRIANGLES, mesh.indexCount, GL_UNSIGNED_INT, 0);
+	else
+		glDrawArrays(GL_TRIANGLES, 0, mesh.vertexCount);
+	glBindVertexArray(0);
+}
 
 void renderMesh(const Shader &shader, const Mesh &mesh, const glm::mat4 &model, const glm::mat4 &vp,
 	const glm::vec3 &lightDir, float ambient)

@@ -1,6 +1,9 @@
 #pragma once
 #include <glm/glm.hpp>
 #include "input.h"
+#include "animation.h"
+
+struct SkinnedModel;
 
 enum class MarioState
 {
@@ -8,8 +11,25 @@ enum class MarioState
 	WALKING,
 	RUNNING,
 	SKIDDING,
-	JUMP_ASCEND,
+	SINGLE_JUMP,
+	DOUBLE_JUMP,
+	TRIPLE_JUMP,
+	LONG_JUMP,
+	BACKFLIP,
+	SIDE_SOMERSAULT,
 	FREEFALL,
+	GROUND_POUND_SPIN,
+	GROUND_POUND_FALL,
+	GROUND_POUND_LAND,
+	CROUCHING,
+	CRAWLING,
+	PUNCH_1,
+	PUNCH_2,
+	PUNCH_3_KICK,
+	JUMP_KICK,
+	DIVE,
+	BELLY_SLIDE,
+	SLIDE_KICK,
 	LANDING,
 };
 
@@ -30,6 +50,22 @@ struct Mario
 	MarioState state = MarioState::IDLE;
 	bool onGround = true;
 
+	// Jump chain tracking
+	int jumpChainCount = 0;
+	float jumpChainTimer = 0.f;
+
+	// Input buffering
+	float jumpBufferTimer = 0.f;
+	float coyoteTimer = 0.f;
+
+	// Combat
+	int punchComboStep = 0;
+	float comboTimer = 0.f;
+
+	// General-purpose state timer
+	float stateTimer = 0.f;
+
+	// Movement constants
 	static constexpr float WALK_SPEED = 8.f;
 	static constexpr float RUN_SPEED = 16.f;
 	static constexpr float GROUND_ACCEL = 24.f;
@@ -43,9 +79,54 @@ struct Mario
 	static constexpr float TURN_SPEED = 720.f;
 	static constexpr float HEIGHT = 1.5f;
 
+	// Jump variant constants
+	static constexpr float DOUBLE_JUMP_VELOCITY = 28.f;
+	static constexpr float TRIPLE_JUMP_VELOCITY = 33.f;
+	static constexpr float TRIPLE_JUMP_SPEED_THRESHOLD = 12.f;
+	static constexpr float LONG_JUMP_VERTICAL = 15.f;
+	static constexpr float LONG_JUMP_HORIZONTAL = 32.f;
+	static constexpr float BACKFLIP_VELOCITY = 35.f;
+	static constexpr float SIDE_SOMERSAULT_VELOCITY = 30.f;
+	static constexpr float GROUND_POUND_GRAVITY_MULT = 2.f;
+
+	// Timing windows (in seconds)
+	static constexpr float JUMP_BUFFER_WINDOW = 4.f / 60.f;
+	static constexpr float COYOTE_TIME = 5.f / 60.f;
+	static constexpr float JUMP_CHAIN_WINDOW = 10.f / 60.f;
+	static constexpr float COMBO_WINDOW = 10.f / 60.f;
+
+	// Action speeds
+	static constexpr float CRAWL_SPEED = 3.f;
+	static constexpr float DIVE_HORIZONTAL_SPEED = 20.f;
+	static constexpr float SLIDE_KICK_SPEED = 18.f;
+
+	AnimState animState;
+
 	void update(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void setAnimClips(const SkinnedModel &model);
 
 private:
+	void updateInputBuffers(const GameInput &input, float dt);
+	void updateIdle(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateWalking(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateRunning(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateSkidding(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateCrouching(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateCrawling(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateAirborne(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateLongJump(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateGroundPoundSpin(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateGroundPoundFall(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateTimedState(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateBellySlide(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateSlideKick(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateLanding(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+
+	void resolveGroundCollision(float dt);
+	void tryGroundJump(const GameInput &input, const glm::vec3 &cameraForward);
+	void enterState(MarioState newState);
+	float getHorizontalSpeed() const;
+
 	void applyGroundMovement(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 	void applyAirMovement(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 	void applyGravity(const GameInput &input, float dt);
@@ -54,4 +135,7 @@ private:
 
 	float skidTimer = 0.f;
 	float landingTimer = 0.f;
+
+	int clipForState[24] = {};
+	bool hasAnimClips = false;
 };

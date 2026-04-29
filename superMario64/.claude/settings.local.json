@@ -23,7 +23,8 @@
       "Bash(echo \"Exit code: $?\")",
       "Bash(python3 -c ' *)",
       "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/mario.py)",
-      "Bash(echo \"Exit: $?\")"
+      "Bash(echo \"Exit: $?\")",
+      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python tools/models/mario.py)"
     ]
   }
 }

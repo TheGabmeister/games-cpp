@@ -35,6 +35,17 @@ The executable is output to `build/Debug/` or `build/Release/`. A post-build ste
 
 New gameplay code goes in the game layer. The platform layer owns the main loop and feeds input/timing into `gameLogic`.
 
+### Game Layer Files
+
+- `input.h/.cpp` — `GameInput` struct abstracts raw `platform::Input` into semantic actions (moveDir, moveStrength, jump, crouch, attack, cameraDelta). All gameplay code reads `GameInput`, never raw keys. Mouse camera requires right-click hold; gamepad right stick always works.
+- `mario.h/.cpp` — `Mario` struct with position, velocity, facingAngle, state machine (`MarioState` enum). `update()` takes `GameInput` + fixedDt + cameraForward. Ground detection via `GroundResult` (currently a Y=0 stub, designed to swap in real raycasts later).
+- `camera.h/.cpp` — `OrbitCamera` (game camera: follows Mario, auto-centers, player-controlled orbit) and `FlyCamera` (debug camera: WASD + mouse). Shared `getProjectionMatrix()`.
+- `renderer.h/.cpp` — `Vertex3D`/`Mesh`/`Shader`/`LineMesh` structs. Shader loading, mesh creation, `loadGLB()` via cgltf (loads first mesh/first primitive only), debug grid/axis generation, render calls.
+
+### Frame Loop
+
+Physics runs on a fixed timestep (1/60s) with an accumulator in `gameLayer.cpp`. Each fixed tick: map input → `mario.update()`. Each variable frame: `orbitCamera.update()` → render. Key 2 toggles fly camera as a debug override. Key 1 toggles ImGui debug UI.
+
 ## Key Compile-Time Macros
 
 - `RESOURCES_PATH` — always `"./resources/"` (relative to executable). Used as a prefix for asset loading: `RESOURCES_PATH "myfile.png"`.
@@ -52,6 +63,13 @@ Uses Dear ImGui v1.92.7-docking. The `thirdparty/imgui-docking/` directory also 
 - ENet (networking) is included but commented out in CMakeLists.txt — uncomment both the `add_subdirectory` and the `target_link_libraries` line to enable it.
 - Save data uses raw struct serialization via `platform::readEntireFile` / `platform::writeEntireFile` into the resources directory.
 - Coordinate system: Y-up, 1 unit = 1 meter. Matches Blender, glTF, and OpenGL defaults — no conversion needed.
+
+## Gotchas
+
+- **Blender is Z-up, engine is Y-up.** The glTF exporter converts automatically, but Blender scripts must use Z for height. A model placed at Blender `(0, 5, 0)` ends up at engine `(0, 0, -5)`, not `(0, 5, 0)`.
+- **`platform::log()` takes a plain `const char*`**, not printf format args. Build strings with `std::string` and call `.c_str()`.
+- **`platform::Input` keyboard buttons** are limited to A–Z, 0–9, Space, Enter, Escape, arrows, Ctrl, Tab, Shift, Alt. No function keys (F1–F12). Use number keys for debug toggles.
+- **glad was generated without GL_DEBUG_OUTPUT.** The `errorReporting.cpp` is guarded by `#ifdef GL_DEBUG_OUTPUT` and compiles to no-ops.
 
 ## Known Benign Warnings
 

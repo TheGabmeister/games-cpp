@@ -9,7 +9,7 @@
 #include <platformTools.h>
 #include <logs.h>
 
-#include "renderer3d.h"
+#include "renderer.h"
 
 gl2d::Renderer2D renderer2d;
 

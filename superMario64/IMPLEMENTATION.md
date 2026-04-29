@@ -19,7 +19,7 @@ src/gameLayer/
 ├── gameLayer.cpp      # Entry points, game state machine, input mapping
 ├── mario.cpp          # Player movement, state machine, camera
 ├── world.cpp          # Level loading, collision, entities
-├── renderer3d.cpp     # 3D rendering pipeline, mesh loading
+├── renderer.cpp     # 3D rendering pipeline, mesh loading
 └── audio.cpp          # SFX and music playback
 
 include/gameLayer/
@@ -235,7 +235,7 @@ Replace the 2D rectangle demo with a 3D test scene. 1200×900 window, vertex-col
 ### Files
 
 **Create:**
-- `include/gameLayer/renderer3d.h` + `src/gameLayer/renderer3d.cpp` — Structs: `Vertex3D` (position, normal, color), `Mesh` (VAO/VBO/EBO), `Shader` (program + cached uniform locations), `FlyCamera` (position, yaw, pitch). Functions: shader loading, mesh creation/destruction, `loadGLB()` via cgltf, debug grid/axis generation, render calls.
+- `include/gameLayer/renderer.h` + `src/gameLayer/renderer.cpp` — Structs: `Vertex3D` (position, normal, color), `Mesh` (VAO/VBO/EBO), `Shader` (program + cached uniform locations), `FlyCamera` (position, yaw, pitch). Functions: shader loading, mesh creation/destruction, `loadGLB()` via cgltf, debug grid/axis generation, render calls.
 - `resources/shaders/basic3d.vert` + `basic3d.frag` — Vertex color + directional light + ambient. Vertex inputs: position (loc 0), normal (loc 1), color (loc 2). Uniforms: MVP, model matrix, light direction, ambient strength.
 - `resources/shaders/debug_line.vert` + `debug_line.frag` — Unlit colored lines. Vertex inputs: position (loc 0), color (loc 1). Uniform: VP matrix.
 - `tools/models/test_scene.py` — Blender script: vertex-colored ramp + cylinder + stepped platform → `resources/models/test_scene.glb`. Validates the Blender→GLB→engine pipeline.
@@ -257,7 +257,7 @@ Replace the 2D rectangle demo with a 3D test scene. 1200×900 window, vertex-col
 
 1. Window size + title change in `glfwMain.cpp`.
 2. Write the 4 shader files.
-3. `renderer3d.h/.cpp` — shader compile/link, mesh VAO/VBO/EBO creation, render functions.
+3. `renderer.h/.cpp` — shader compile/link, mesh VAO/VBO/EBO creation, render functions.
 4. Hardcoded test geometry (ground plane + 5 cubes). Wire into `gameLayer.cpp` with depth test + culling. Verify rendering.
 5. FlyCamera (WASD + mouse). Verify navigation.
 6. `loadGLB()` via cgltf. Load the Blender test scene. Verify it renders alongside hardcoded geometry.

@@ -396,7 +396,7 @@ glm::mat4 FlyCamera::getProjectionMatrix(float aspect) const
 
 void FlyCamera::update(platform::Input &input, float dt)
 {
-	if (!active)
+	if (!active || !input.hasFocus)
 	{
 		firstMouse = true;
 		return;

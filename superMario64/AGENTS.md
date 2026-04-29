@@ -4,9 +4,13 @@ Guidance for coding agents working in this repository.
 
 ## Project Overview
 
-This is an OpenGL 2D game template in C++17, based on
-`meemknight/cmakeSetup`. It uses GLFW for windowing, glad for OpenGL loading,
-gl2d for 2D rendering, Dear ImGui docking for debug UI, and raudio for audio.
+This is a C++17/OpenGL game project built from the `meemknight/cmakeSetup`
+template. It uses GLFW for windowing, glad for OpenGL loading, gl2d/glui for
+2D overlays and menus, Dear ImGui docking for debug UI, and raudio for audio.
+
+The goal is an SM64-inspired 3D platformer prototype. Treat `SPEC.md` as the
+content/design target and `IMPLEMENTATION.md` as the source of truth for
+technical decisions.
 
 ## Build Commands
 
@@ -38,6 +42,51 @@ The platform layer calls the game layer through the entry points declared in
 - `gameLogic(float deltaTime, platform::Input &input)`: called every frame;
   return `false` to quit.
 - `closeGame()`: called on shutdown, though force-close paths may skip it.
+
+## Game-Specific Decisions
+
+- Keep high-level technical choices aligned with `IMPLEMENTATION.md`. If a task
+  requires changing one of those choices, update the document in the same
+  change.
+- Use a Y-up coordinate system everywhere: Blender, glTF, OpenGL, gameplay, and
+  collision. Scale is 1 unit = 1 meter; Mario is roughly 1.5 units tall.
+- Prefer a vertical-slice workflow. Prove core movement, camera, collision, and
+  one simple playable test level before expanding content volume.
+- Keep all runtime gameplay code in `src/gameLayer/` and `include/gameLayer/`
+  unless a platform-layer change is truly required.
+- All assets should be original, generated, or royalty-free. Do not add ripped
+  Nintendo assets, audio, models, textures, or proprietary data.
+
+## Runtime Systems
+
+- Route the game through a top-level game state machine: title/file select,
+  gameplay, pause, and quit.
+- Run gameplay physics on a fixed 1/60s timestep with an accumulator. Rendering,
+  animation interpolation, and non-simulation timers may use variable
+  `deltaTime`.
+- Map `platform::Input` to semantic game actions before gameplay logic. Do not
+  scatter raw key/button checks through movement, entity, or UI systems.
+- Use OpenGL 3.3-era rendering for the 3D world and draw gl2d/glui HUD or menus
+  as a final orthographic overlay.
+- Use glTF/GLB for models and course geometry through `cgltf`. Vertex colors are
+  the starting art path; texture support can be added when the relevant phase
+  needs it.
+- Generate models, levels, collision meshes, SFX, and music through scripts
+  under `tools/` when possible so assets are reproducible.
+
+## Collision And Levels
+
+- Level collision is triangle-mesh based. Triangles carry surface type and
+  collision layer bits, and are partitioned with a uniform grid for queries.
+- Entity collision uses simple primitives: capsule, sphere, or AABB. Keep
+  primitive-vs-primitive and primitive-vs-level checks straightforward before
+  adding special cases.
+- Use category/mask bitmasks for collision filtering. Preserve the layer intent
+  from `IMPLEMENTATION.md`: player, enemy, player attack, collectible, terrain,
+  trigger, intangible, and projectile.
+- Each course should eventually have a visual glTF/GLB, a simplified collision
+  mesh, object placement data, and course metadata. Hardcoding is acceptable in
+  early phases, but do not make hardcoded paths or assumptions hard to migrate.
 
 ## CMake And Source Layout
 
@@ -76,10 +125,25 @@ local addon compatibility.
 - Keep gameplay changes in the game layer when possible.
 - Keep platform changes small and deliberate.
 - Use `RESOURCES_PATH` for assets that need to load at runtime.
+- Use `resources/shaders/`, `resources/models/`, `resources/courses/`,
+  `resources/sfx/`, and `resources/music/` for runtime assets that should be
+  copied next to the executable.
+- The current save plan uses raw versioned structs and save slots in resources
+  during development. Keep the magic/version fields and avoid changing save
+  binary layout casually.
 - Avoid broad formatting churn in third-party code.
 - Do not edit generated build output under `build/` unless explicitly asked.
 - Preserve existing misspellings in macros, target names, and compatibility
   surfaces unless the task is explicitly to rename them.
+
+## Debug Tooling
+
+- ImGui debug tooling is for debug/development builds and should be guarded by
+  `DEVELOPLEMT_BUILD` where practical.
+- Useful debug views include frame timing, Mario state, entity inspection,
+  collision visualization, collision layer toggles, grid/axis overlays, and a
+  free camera.
+- Do not let debug UI become required for normal gameplay flow.
 
 ## Verification
 
@@ -99,4 +163,3 @@ Known benign warnings include:
 
 - `APIENTRY` macro redefinition between glad and the Windows SDK.
 - CMake CMP0115 development warnings from `stb_image` and `stb_truetype`.
-

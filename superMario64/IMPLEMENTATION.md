@@ -4,6 +4,12 @@ High-level technical decisions and architecture for building the game described 
 
 ---
 
+## Coordinate System and Scale
+
+Y-up everywhere (Blender, glTF, OpenGL — no conversion needed). 1 unit = 1 meter. Reference sizes: Mario ~1.5 units tall, Goomba ~0.8, coin ~0.5 diameter, standard platform ~4 wide, camera default distance ~8 behind Mario.
+
+---
+
 ## Project Structure
 
 The existing two-layer architecture stays. Platform layer (main loop, GLFW, input, file I/O) is untouched — all new code goes in the game layer. Start with few files, split when they grow large:
@@ -65,6 +71,12 @@ Sphere-based per-object check against the 6 frustum planes. Level geometry can b
 
 Models use glTF/GLB format (supports static meshes and skeletal animation in one format). Loaded via cgltf (header-only C library, vendored in `thirdparty/cgltf/`), parsed at load time into VBOs (position, normal, UV/color). Levels are static meshes loaded once per course. Animated characters use skeletal animation data from the glTF file.
 
+### Model Authoring
+
+3D models and levels are generated via headless Blender Python scripts in `tools/models/`. Scripts build meshes procedurally from primitives (cubes, cylinders, planes), assign vertex colors, set up armatures and keyframe animations, and export to glTF/GLB. Output files go to `resources/models/` (characters, enemies, objects) and `resources/courses/` (level geometry). Collision meshes are exported as separate simplified glTF files from the same scripts.
+
+Blender path: `"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python <script>.py`
+
 ---
 
 ## Shader Approach
@@ -87,9 +99,28 @@ An enum of ~30 states (idle, walking, running, crouch, all jump variants, combat
 
 ## Collision Detection
 
-Three separate checks each frame: ground (downward ray/sphere to find floor height and surface type), walls (horizontal sweep for obstruction and sliding), and ceiling (upward check). The collision mesh is a list of triangles, each tagged with a surface type and layer bits. A spatial acceleration structure keeps queries fast.
+### Level Collision
 
-Collision mesh uses a uniform grid for spatial partitioning — divide the level into equal-sized cells, each storing its triangles. Query only the cells near Mario. Simple and sufficient for our level sizes.
+Three separate checks each frame: ground (downward ray/sphere to find floor height and surface type), walls (horizontal sweep for obstruction and sliding), and ceiling (upward check). The level collision mesh is a triangle mesh where each triangle is tagged with a surface type and layer bits. Uniform grid for spatial partitioning — divide the level into equal-sized cells, each storing its triangles. Query only the cells near Mario.
+
+### Entity Collision
+
+Entities use primitive collider shapes attached as components: sphere (Goombas, coins, Bob-ombs), capsule (Mario, tall characters), or AABB (crates, blocks, triggers). Entity-vs-entity checks use primitive-vs-primitive tests. Entity-vs-level checks test the primitive against nearby level triangles from the grid.
+
+### Collision Layers
+
+Each collider (entity or level triangle) has two bitmasks: a `category` (what I am) and a `mask` (what I collide with). Two objects only collide if `(a.category & b.mask) && (b.category & a.mask)`. Layers:
+
+- Bit 0: `PLAYER` — Mario.
+- Bit 1: `ENEMY` — Goombas, Bob-ombs, Koopas, etc.
+- Bit 2: `PLAYER_ATTACK` — Mario's punch/kick/dive hitboxes.
+- Bit 3: `COLLECTIBLE` — coins, stars, 1-ups.
+- Bit 4: `TERRAIN` — level geometry (floors, walls, ceilings).
+- Bit 5: `TRIGGER` — warps, loading zones, event volumes.
+- Bit 6: `INTANGIBLE` — Vanish Cap Mario, decorations.
+- Bit 7: `PROJECTILE` — Bob-omb explosions, fire.
+
+Examples: an enemy sets category=ENEMY, mask=PLAYER|PLAYER_ATTACK|TERRAIN. A coin sets category=COLLECTIBLE, mask=PLAYER. Vanish Cap Mario sets category=INTANGIBLE, mask=TERRAIN (walks on floors but passes through enemies).
 
 ---
 
@@ -115,11 +146,34 @@ Thin wrapper around raudio. Music: one track playing at a time, crossfade on are
 
 SFX are generated via Python scripts in `tools/sfx/` using numpy (waveform synthesis) and scipy (WAV export, filters). Each sound type is a parameterized function — pitch, duration, envelope, layering — so sounds are reproducible and tunable. Output WAV files go to `resources/sfx/`.
 
+### Music Generation
+
+Python scripts in `tools/music/` using `midiutil` to generate MIDI. FluidSynth renders MIDI to WAV using the GeneralUser-GS soundfont. ffmpeg converts WAV to OGG. Output OGG files go to `resources/music/`.
+
+Tool paths:
+- FluidSynth: `D:\fluidsynth-v2.5.4-win10-x64-cpp11`
+- Soundfont: `D:\GeneralUser-GS\GeneralUser-GS.sf2`
+- ffmpeg: `D:\ffmpeg-8.1-essentials_build`
+
 ---
 
 ## Save System
 
 Raw struct serialization via the existing `platform::writeEntireFile` / `platform::readEntireFile`. The save struct has a magic number and version field for corruption/versioning detection. Tracks: stars collected per course, total stars, keys obtained, cap switches pressed, lives. Four save file slots, saved to `resources/save_N.dat`.
+
+---
+
+## Debug Tooling
+
+ImGui docking windows, debug builds only (`DEVELOPLEMT_BUILD`). Game viewport stays in the center; debug windows dock to edges. F1 toggles all debug UI on/off.
+
+- **FPS / frame time** — always-visible top bar.
+- **Collision visualizer** — wireframe overlay of level collision mesh, entity colliders, and contact points.
+- **Mario state inspector** — live view of state, velocity, position, onGround, surface type, jump chain, coyote frames, active cap.
+- **Entity inspector** — list of active entities with type, position, AI state, health. Select to highlight.
+- **Free camera** — detach from Mario and fly around the level.
+- **Grid / axis overlay** — world origin and ground grid for verifying positions and scale.
+- **Collision layer viewer** — toggle visibility of individual collision layers.
 
 ---
 

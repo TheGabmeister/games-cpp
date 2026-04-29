@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-OpenGL 2D game template (C++17) based on [meemknight/cmakeSetup](https://github.com/meemknight/cmakeSetup). Uses GLFW for windowing, glad for OpenGL loading, gl2d for 2D rendering, Dear ImGui (docking branch) for debug UI, and raudio for audio.
+Super Mario 64 remake in C++17/OpenGL, built on the [meemknight/cmakeSetup](https://github.com/meemknight/cmakeSetup) template. Uses GLFW for windowing, glad for OpenGL loading, gl2d for 2D overlays, Dear ImGui (docking branch) for debug UI, raudio for audio, cgltf for glTF model loading, and nlohmann/json for data files.
+
+See SPEC.md for the full game design and IMPLEMENTATION.md for technical decisions and architecture.
 
 ## Build Commands
 
@@ -49,12 +51,12 @@ Uses Dear ImGui v1.92.7-docking. The `thirdparty/imgui-docking/` directory also 
 - All thirdparty dependencies live in `thirdparty/` with their own CMakeLists.txt and are linked statically.
 - ENet (networking) is included but commented out in CMakeLists.txt — uncomment both the `add_subdirectory` and the `target_link_libraries` line to enable it.
 - Save data uses raw struct serialization via `platform::readEntireFile` / `platform::writeEntireFile` into the resources directory.
+- Coordinate system: Y-up, 1 unit = 1 meter. Matches Blender, glTF, and OpenGL defaults — no conversion needed.
 
 ## Known Benign Warnings
 
 - `APIENTRY` macro redefinition (glad vs Windows SDK) — harmless, can be ignored.
 - CMP0115 policy warnings from `stb_image` and `stb_truetype` — these are upstream CMake dev warnings, not build issues.
-
 
 ## Coding Principles
 
@@ -68,7 +70,19 @@ When in doubt: for code one person owns and rarely changes, lean KISS. For inter
 
 ## Asset Pipeline
 
+- **3D models + animations**: Blender 5.1 Python scripts in `tools/models/`. Models built procedurally, exported as glTF/GLB. Output to `resources/models/` (characters, enemies, objects) and `resources/courses/` (level geometry). Run headless: `"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python <script>.py`
 - **Sprites**: spritesheets drawn as single SVGs with all frames on a 64px grid, exported as one PNG via Inkscape (`"C:/Program Files/Inkscape/bin/inkscape.exe" player.svg -o player.png -w 256 -h 256` for a 4x4 sheet). One sheet per category (player, enemy type, tiles, items, etc.). Code indexes frames by row/column source rectangle. Store SVG and PNG in `resources/sprites/`.
 - **Sounds**: Python scripts in `tools/sfx/` using numpy + scipy. Each sound is a parameterized function (waveform synthesis, envelopes, filters). Output WAV to `resources/sfx/`.
-- **Music**: OGG files in `resources/music/`. Loaded via `LoadMusicStream`, updated every frame. Composition pipeline: Python scripts in `tools/music/` use `midiutil` to generate MIDI → FluidSynth renders with a soundfont to WAV → ffmpeg converts to OGG. 
-- **3D models + animations** | Blender 5.1 Python | `"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python <script>.py` |
+- **Music**: Python scripts in `tools/music/` using `midiutil` to generate MIDI. FluidSynth renders with a soundfont to WAV. ffmpeg converts to OGG. Output to `resources/music/`.
+
+### External Tool Paths
+
+- Blender: `"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe"`
+- Inkscape: `"C:/Program Files/Inkscape/bin/inkscape.exe"`
+- FluidSynth: `D:\fluidsynth-v2.5.4-win10-x64-cpp11`
+- Soundfont: `D:\GeneralUser-GS\GeneralUser-GS.sf2`
+- ffmpeg: `D:\ffmpeg-8.1-essentials_build`
+
+### Python Dependencies
+
+numpy, scipy, midiutil — install via `pip install numpy scipy midiutil`.

@@ -453,7 +453,7 @@ void Mario::resolveGroundCollision(float dt)
 		    state != MarioState::GROUND_POUND_FALL && state != MarioState::JUMP_KICK &&
 		    state != MarioState::DIVE && state != MarioState::SLIDE_KICK)
 		{
-			state = MarioState::FREEFALL;
+			enterState(MarioState::FREEFALL);
 		}
 	}
 }
@@ -683,7 +683,7 @@ void Mario::updateAirborne(const GameInput &input, float dt, const glm::vec3 &ca
 	     state == MarioState::TRIPLE_JUMP || state == MarioState::BACKFLIP ||
 	     state == MarioState::SIDE_SOMERSAULT) && velocity.y <= 0.f)
 	{
-		state = MarioState::FREEFALL;
+		enterState(MarioState::FREEFALL);
 	}
 }
 
@@ -693,7 +693,7 @@ void Mario::updateLongJump(const GameInput &input, float dt, const glm::vec3 &ca
 	applyGravity(input, dt);
 
 	if (velocity.y <= 0.f)
-		state = MarioState::FREEFALL;
+		enterState(MarioState::FREEFALL);
 }
 
 void Mario::updateGroundPoundSpin(const GameInput &input, float dt, const glm::vec3 &cameraForward)

@@ -17,6 +17,9 @@
 #include "animation.h"
 #include "world.h"
 #include "hud.h"
+#include "entity.h"
+#include "entityManager.h"
+#include "course.h"
 
 gl2d::Renderer2D renderer2d;
 
@@ -55,8 +58,15 @@ Mesh yellowCoinMesh;
 Mesh redCoinMesh;
 Mesh blueCoinMesh;
 Mesh heartMesh;
+Mesh starMesh;
 Mesh enemyMesh;
 Mesh waterPlaneMesh;
+
+SkinnedModel enemyModels[(int)EntityType::COUNT];
+bool enemyModelsLoaded[(int)EntityType::COUNT] = {};
+EntityManager entityManager;
+LoadedCourse activeCourse;
+bool useCourse = false;
 
 gl2d::Font hudFont;
 HudState hudState;
@@ -125,7 +135,15 @@ bool initGame()
 	redCoinMesh = createCube({1.f, 0.2f, 0.2f});
 	blueCoinMesh = createCube({0.2f, 0.4f, 1.f});
 	heartMesh = createCube({1.f, 0.4f, 0.7f});
+	starMesh = createCube({1.f, 1.f, 0.2f});
 	enemyMesh = createCube({0.8f, 0.15f, 0.1f});
+
+	enemyModels[(int)EntityType::Goomba] = loadSkinnedGLB(RESOURCES_PATH "models/goomba.glb");
+	enemyModels[(int)EntityType::BobOmb] = loadSkinnedGLB(RESOURCES_PATH "models/bob_omb.glb");
+	enemyModels[(int)EntityType::KoopaTroopa] = loadSkinnedGLB(RESOURCES_PATH "models/koopa_troopa.glb");
+	enemyModels[(int)EntityType::Boo] = loadSkinnedGLB(RESOURCES_PATH "models/boo.glb");
+	for (int i = 0; i < (int)EntityType::COUNT; i++)
+		enemyModelsLoaded[i] = (enemyModels[i].mesh.vao != 0);
 
 	hudFont.createFromFile(RESOURCES_PATH "roboto_black.ttf");
 	hudState.showCourseName("Bob-omb Battlefield", "Star 1: Big Bob-omb on the Summit");
@@ -182,6 +200,28 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		if (animViewerMode)
 			showAnimDebugger = true;
 	}
+	if (input.isButtonPressed(platform::Button::NR5))
+	{
+		if (!useCourse)
+		{
+			if (activeCourse.loadFromJSON(RESOURCES_PATH "courses/bob_omb_battlefield.json"))
+			{
+				activeCourse.spawnEntities();
+				mario.position = activeCourse.def.marioSpawn;
+				mario.velocity = {};
+				mario.spawnPosition = activeCourse.def.marioSpawn;
+				useCourse = true;
+			}
+		}
+		else
+		{
+			activeCourse.unload();
+			useCourse = false;
+			mario.position = {0.f, 0.f, 0.f};
+			mario.velocity = {};
+			mario.spawnPosition = {0.f, 0.f, 0.f};
+		}
+	}
 
 	// Map input
 	if (!useFlyCam && input.hasFocus)
@@ -201,25 +241,49 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		if (!animViewerMode)
 		{
 			glm::vec3 camFwd = getOrbitCameraForward();
-			updatePhase5Objects(phase5World, FIXED_DT, mario.position, mario.groundPoundImpact);
-			mario.update(currentInput, FIXED_DT, camFwd, collisionWorldLoaded ? &collisionWorld : nullptr, &phase5World);
 
-			updateCollectibles(phase5World, FIXED_DT);
-
-			int pickup = checkCollectiblePickup(phase5World, mario.position);
-			while (pickup >= 0)
+			CollisionWorld *activeCollWorld = nullptr;
+			Phase5World *activeP5World = nullptr;
+			EntityManager *activeEntMgr = nullptr;
+			if (useCourse && activeCourse.loaded)
 			{
-				switch (phase5World.collectibles[pickup].type)
-				{
-				case CollectibleType::YellowCoin: mario.collectCoin(1); break;
-				case CollectibleType::RedCoin: mario.collectCoin(2); break;
-				case CollectibleType::BlueCoin: mario.collectCoin(5); break;
-				default: break;
-				}
-				pickup = checkCollectiblePickup(phase5World, mario.position);
+				activeCollWorld = &activeCourse.collisionWorld;
+				activeP5World = &activeCourse.phase5World;
+				activeEntMgr = &activeCourse.entityManager;
+			}
+			else
+			{
+				activeCollWorld = collisionWorldLoaded ? &collisionWorld : nullptr;
+				activeP5World = &phase5World;
+				activeEntMgr = &entityManager;
 			}
 
-			if (checkSpinningHeart(phase5World, mario.position))
+			updatePhase5Objects(*activeP5World, FIXED_DT, mario.position, mario.groundPoundImpact);
+			mario.update(currentInput, FIXED_DT, camFwd, activeCollWorld, activeP5World);
+
+			updateCollectibles(*activeP5World, FIXED_DT);
+
+			int pickup = checkCollectiblePickup(*activeP5World, mario.position);
+			while (pickup >= 0)
+			{
+				CollectibleType ct = activeP5World->collectibles[pickup].type;
+				switch (ct)
+				{
+				case CollectibleType::YellowCoin: mario.collectCoin(1); break;
+				case CollectibleType::RedCoin:
+					mario.collectCoin(2);
+					if (useCourse) activeCourse.redCoinsCollected++;
+					break;
+				case CollectibleType::BlueCoin: mario.collectCoin(5); break;
+				case CollectibleType::Star:
+					mario.stars++;
+					break;
+				default: break;
+				}
+				pickup = checkCollectiblePickup(*activeP5World, mario.position);
+			}
+
+			if (checkSpinningHeart(*activeP5World, mario.position))
 			{
 				mario.healAccumulator += 4.f * FIXED_DT;
 				if (mario.healAccumulator >= 1.f)
@@ -234,9 +298,96 @@ bool gameLogic(float deltaTime, platform::Input &input)
 				mario.healAccumulator = 0.f;
 			}
 
-			int enemyHit = checkEnemyContact(phase5World, mario.position, Mario::COLLISION_RADIUS);
+			// Old test enemies
+			int enemyHit = checkEnemyContact(*activeP5World, mario.position, Mario::COLLISION_RADIUS);
 			if (enemyHit >= 0)
-				mario.takeDamage(1, phase5World.enemies[enemyHit].position);
+				mario.takeDamage(1, activeP5World->enemies[enemyHit].position);
+
+			// Entity system enemies
+			activeEntMgr->spawnDespawn(mario.position);
+			activeEntMgr->update(FIXED_DT, mario.position, mario.facingAngle, activeCollWorld);
+
+			// Combat: stomp > attack > contact
+			if (mario.isStomping())
+			{
+				int target = activeEntMgr->checkAttackHit(mario.position, Mario::COLLISION_RADIUS + 0.2f);
+				if (target >= 0)
+				{
+					Entity *e = activeEntMgr->entities[target].get();
+					activeEntMgr->defeatEnemy(target);
+					mario.velocity.y = Mario::JUMP_VELOCITY * 0.6f;
+					if (e->dropsCoin)
+					{
+						Collectible coin;
+						coin.type = (e->coinDropValue >= 5) ? CollectibleType::BlueCoin : CollectibleType::YellowCoin;
+						coin.position = e->position + glm::vec3(0.f, 0.5f, 0.f);
+						activeP5World->collectibles.push_back(coin);
+					}
+				}
+			}
+			else if (mario.isAttacking())
+			{
+				glm::vec3 attackPos = mario.position + mario.getFacingForward() * 0.5f;
+				int target = activeEntMgr->checkAttackHit(attackPos, 1.0f);
+				if (target >= 0)
+				{
+					Entity *e = activeEntMgr->entities[target].get();
+					activeEntMgr->defeatEnemy(target);
+					if (e->dropsCoin)
+					{
+						Collectible coin;
+						coin.type = (e->coinDropValue >= 5) ? CollectibleType::BlueCoin : CollectibleType::YellowCoin;
+						coin.position = e->position + glm::vec3(0.f, 0.5f, 0.f);
+						activeP5World->collectibles.push_back(coin);
+					}
+				}
+			}
+			else if (!mario.isInvincible() && !mario.isDead())
+			{
+				int contact = activeEntMgr->checkEnemyContact(mario.position, Mario::COLLISION_RADIUS);
+				if (contact >= 0)
+				{
+					Entity *e = activeEntMgr->entities[contact].get();
+					mario.takeDamage(1, e->position);
+				}
+			}
+
+			// Update entity animations
+			for (auto &entity : activeEntMgr->entities)
+			{
+				if (!entity->active || !entity->alive) continue;
+				int mi = (int)entity->type;
+				if (mi < (int)EntityType::COUNT && enemyModelsLoaded[mi])
+					updateAnimState(entity->animState, enemyModels[mi].clips, FIXED_DT);
+			}
+
+			// Red coin star check
+			if (useCourse && activeCourse.redCoinsCollected >= 8)
+			{
+				// Spawn star at a fixed location (could be configurable)
+				bool alreadyHasStar = false;
+				for (const Collectible &c : activeP5World->collectibles)
+					if (c.type == CollectibleType::Star && c.active) alreadyHasStar = true;
+				if (!alreadyHasStar)
+				{
+					Collectible star;
+					star.type = CollectibleType::Star;
+					star.position = mario.position + glm::vec3(0.f, 3.f, 0.f);
+					star.radius = 2.0f;
+					activeP5World->collectibles.push_back(star);
+				}
+			}
+
+			// 100-coin star
+			if (useCourse && mario.coins >= 100 && !activeCourse.hundredCoinStarSpawned)
+			{
+				activeCourse.hundredCoinStarSpawned = true;
+				Collectible star;
+				star.type = CollectibleType::Star;
+				star.position = mario.position + glm::vec3(0.f, 3.f, 0.f);
+				star.radius = 2.0f;
+				activeP5World->collectibles.push_back(star);
+			}
 
 			hudState.update(FIXED_DT);
 
@@ -270,12 +421,15 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	}
 
 	// ---- Rendering ----
+	Phase5World &renderP5World = (useCourse && activeCourse.loaded) ? activeCourse.phase5World : phase5World;
+	EntityManager &renderEntMgr = (useCourse && activeCourse.loaded) ? activeCourse.entityManager : entityManager;
+
 	glViewport(0, 0, w, h);
 	bool cameraUnderwater = false;
 	if (!animViewerMode)
 	{
 		glm::vec3 camPos = useFlyCam ? flyCamera.position : orbitCamera.currentPosition;
-		for (const WaterVolume &wv : phase5World.waterVolumes)
+		for (const WaterVolume &wv : renderP5World.waterVolumes)
 		{
 			if (camPos.x >= wv.minBounds.x && camPos.x <= wv.maxBounds.x &&
 				camPos.z >= wv.minBounds.z && camPos.z <= wv.maxBounds.z &&
@@ -305,13 +459,22 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	// Level geometry
 	if (!animViewerMode)
 	{
-		for (int i = 0; i < 5; i++)
-			renderMesh(basicShader, cubes[i], glm::translate(cubePositions[i]), vp);
-		if (testModelLoaded)
-			renderMesh(basicShader, testModel, glm::mat4(1.f), vp);
-		if (phase4CollisionVisualLoaded)
-			renderMesh(basicShader, phase4CollisionVisual, glm::mat4(1.f), vp);
-		for (const Phase5Object &object : phase5World.objects)
+		if (useCourse && activeCourse.loaded)
+		{
+			if (activeCourse.visualMesh.vao)
+				renderMesh(basicShader, activeCourse.visualMesh, glm::mat4(1.f), vp);
+		}
+		else
+		{
+			for (int i = 0; i < 5; i++)
+				renderMesh(basicShader, cubes[i], glm::translate(cubePositions[i]), vp);
+			if (testModelLoaded)
+				renderMesh(basicShader, testModel, glm::mat4(1.f), vp);
+			if (phase4CollisionVisualLoaded)
+				renderMesh(basicShader, phase4CollisionVisual, glm::mat4(1.f), vp);
+		}
+
+		for (const Phase5Object &object : renderP5World.objects)
 		{
 			if (!object.active)
 				continue;
@@ -319,7 +482,7 @@ bool gameLogic(float deltaTime, platform::Input &input)
 				glm::scale(object.halfExtents * 2.f);
 			renderMesh(basicShader, cubes[(int)object.type % 5], model, vp);
 		}
-		for (const Phase5Pole &pole : phase5World.poles)
+		for (const Phase5Pole &pole : renderP5World.poles)
 		{
 			glm::mat4 model = glm::translate(pole.base + glm::vec3(0.f, pole.height * 0.5f, 0.f)) *
 				glm::scale(glm::vec3(pole.radius * 2.f, pole.height, pole.radius * 2.f));
@@ -327,7 +490,7 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		}
 
 		// Collectibles
-		for (const Collectible &c : phase5World.collectibles)
+		for (const Collectible &c : renderP5World.collectibles)
 		{
 			if (!c.active) continue;
 			float bobY = sinf(c.bobTimer * 2.f) * 0.15f;
@@ -347,15 +510,60 @@ bool gameLogic(float deltaTime, platform::Input &input)
 			case CollectibleType::SpinningHeart:
 				renderMesh(basicShader, heartMesh, model * glm::scale(glm::vec3(0.5f, 0.5f, 0.12f)), vp);
 				break;
+			case CollectibleType::Star:
+				renderMesh(basicShader, starMesh, model * glm::scale(glm::vec3(0.6f, 0.6f, 0.15f)), vp);
+				break;
 			}
 		}
 
-		// Test enemies
-		for (const TestEnemy &e : phase5World.enemies)
+		// Test enemies (old system)
+		for (const TestEnemy &e : renderP5World.enemies)
 		{
 			if (!e.active) continue;
 			glm::mat4 model = glm::translate(e.position) * glm::scale(glm::vec3(e.radius));
 			renderMesh(basicShader, enemyMesh, model, vp);
+		}
+
+		// Entity system enemies (skinned models)
+		for (auto &entity : renderEntMgr.entities)
+		{
+			if (!entity->active || !entity->alive) continue;
+			int mi = (int)entity->type;
+			if (mi >= (int)EntityType::COUNT || !enemyModelsLoaded[mi])
+			{
+				// Fallback: render as colored cube
+				glm::mat4 model = glm::translate(entity->position)
+					* glm::scale(glm::vec3(entity->collisionRadius));
+				renderMesh(basicShader, enemyMesh, model, vp);
+				continue;
+			}
+
+			SkinnedModel &eModel = enemyModels[mi];
+			glm::mat4 eSkinMatrices[MAX_BONES];
+			evaluateAnimState(entity->animState, eModel.clips, eModel.skeleton, eSkinMatrices);
+
+			glm::mat4 entityModelMat = glm::translate(entity->position)
+				* glm::rotate(glm::radians(entity->facingAngle + 180.f), glm::vec3(0, 1, 0));
+
+			bool needBlend = (entity->transparency > 0.01f);
+			if (needBlend)
+			{
+				glEnable(GL_BLEND);
+				glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+				glUseProgram(skinnedShader.program);
+				if (skinnedShader.u_alpha >= 0)
+					glUniform1f(skinnedShader.u_alpha, 1.f - entity->transparency);
+			}
+
+			renderSkinnedMesh(skinnedShader, eModel.mesh, entityModelMat, vp,
+				eSkinMatrices, (int)eModel.skeleton.bones.size());
+
+			if (needBlend)
+			{
+				if (skinnedShader.u_alpha >= 0)
+					glUniform1f(skinnedShader.u_alpha, 1.0f);
+				glDisable(GL_BLEND);
+			}
 		}
 
 		// Water planes (transparent)
@@ -365,7 +573,7 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		glUseProgram(basicShader.program);
 		if (basicShader.u_alpha >= 0)
 			glUniform1f(basicShader.u_alpha, 0.45f);
-		for (const WaterVolume &wv : phase5World.waterVolumes)
+		for (const WaterVolume &wv : renderP5World.waterVolumes)
 		{
 			glm::vec3 center = (wv.minBounds + wv.maxBounds) * 0.5f;
 			center.y = wv.surfaceY;
@@ -400,7 +608,13 @@ bool gameLogic(float deltaTime, platform::Input &input)
 
 	// Debug overlays
 	glLineWidth(2.f);
-	if (showCollisionOverlay && collisionWireMeshLoaded) renderLines(lineShader, collisionWireMesh, vp);
+	if (showCollisionOverlay)
+	{
+		if (useCourse && activeCourse.loaded && activeCourse.collisionWireMesh.vao)
+			renderLines(lineShader, activeCourse.collisionWireMesh, vp);
+		else if (collisionWireMeshLoaded)
+			renderLines(lineShader, collisionWireMesh, vp);
+	}
 	if (showGrid) renderLines(lineShader, gridMesh, vp);
 	if (showAxes) renderLines(lineShader, axisMesh, vp);
 	glLineWidth(1.f);
@@ -479,9 +693,20 @@ bool gameLogic(float deltaTime, platform::Input &input)
 			mario.die();
 		ImGui::Separator();
 
+		// Entity system debug
+		EntityManager &dbgEntMgr = (useCourse && activeCourse.loaded) ? activeCourse.entityManager : entityManager;
+		int activeEnts = 0;
+		for (auto &e : dbgEntMgr.entities)
+			if (e->active && e->alive) activeEnts++;
+		ImGui::Text("Entities: %d/%d active", activeEnts, (int)dbgEntMgr.entities.size());
+		if (useCourse)
+			ImGui::Text("Course: %s  RedCoins: %d/8", activeCourse.def.name.c_str(), activeCourse.redCoinsCollected);
+		ImGui::Separator();
+
 		ImGui::Text("Press 1: toggle debug UI");
 		ImGui::Text("Press 2: fly camera (%s)", useFlyCam ? "ON" : "OFF");
 		ImGui::Text("Press 4: anim viewer (%s)", animViewerMode ? "ON" : "OFF");
+		ImGui::Text("Press 5: toggle course (%s)", useCourse ? "BoB" : "Test Level");
 
 		if (useFlyCam)
 		{
@@ -568,10 +793,14 @@ void closeGame()
 	destroyMesh(blueCoinMesh);
 	destroyMesh(heartMesh);
 	destroyMesh(enemyMesh);
+	destroyMesh(starMesh);
 	destroyMesh(waterPlaneMesh);
 	if (testModelLoaded) destroyMesh(testModel);
 	if (phase4CollisionVisualLoaded) destroyMesh(phase4CollisionVisual);
 	if (marioModelLoaded) destroySkinnedMesh(marioModel.mesh);
+	for (int i = 0; i < (int)EntityType::COUNT; i++)
+		if (enemyModelsLoaded[i]) destroySkinnedMesh(enemyModels[i].mesh);
+	if (activeCourse.loaded) activeCourse.unload();
 	if (collisionWireMeshLoaded) destroyLineMesh(collisionWireMesh);
 	destroyLineMesh(gridMesh);
 	destroyLineMesh(axisMesh);

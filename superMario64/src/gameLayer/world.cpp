@@ -731,6 +731,7 @@ const char *collectibleTypeName(CollectibleType type)
 	case CollectibleType::RedCoin: return "RedCoin";
 	case CollectibleType::BlueCoin: return "BlueCoin";
 	case CollectibleType::SpinningHeart: return "SpinningHeart";
+	case CollectibleType::Star: return "Star";
 	}
 	return "Unknown";
 }

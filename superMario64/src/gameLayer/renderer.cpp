@@ -117,6 +117,7 @@ SkinnedShader loadSkinnedShader(const char *vertPath, const char *fragPath)
 	s.u_model = glGetUniformLocation(s.program, "u_model");
 	s.u_lightDir = glGetUniformLocation(s.program, "u_lightDir");
 	s.u_ambientStrength = glGetUniformLocation(s.program, "u_ambientStrength");
+	s.u_alpha = glGetUniformLocation(s.program, "u_alpha");
 
 	for (int i = 0; i < MAX_BONES; i++)
 	{
@@ -704,6 +705,7 @@ void renderSkinnedMesh(const SkinnedShader &shader, const SkinnedMesh &mesh,
 	if (shader.u_model >= 0) glUniformMatrix4fv(shader.u_model, 1, GL_FALSE, glm::value_ptr(model));
 	if (shader.u_lightDir >= 0) glUniform3fv(shader.u_lightDir, 1, glm::value_ptr(lightDir));
 	if (shader.u_ambientStrength >= 0) glUniform1f(shader.u_ambientStrength, ambient);
+	if (shader.u_alpha >= 0) glUniform1f(shader.u_alpha, 1.0f);
 
 	int count = std::min(boneCount, MAX_BONES);
 	for (int i = 0; i < count; i++)

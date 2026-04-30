@@ -42,18 +42,27 @@ New gameplay code goes in the game layer. The platform layer owns the main loop 
 - `animation.h/.cpp` — Skeletal animation system. `Skeleton` (bone hierarchy + inverse bind matrices), `AnimClip` (named clip with channels of keyframes), `AnimPose` (per-bone local transforms), `AnimState` (playback state with crossfade blending). Key functions: `sampleClip()`, `blendPoses()`, `computeSkinMatrices()`, `playClip()`, `updateAnimState()`, `evaluateAnimState()`. `MAX_BONES` = 64.
 - `camera.h/.cpp` — `OrbitCamera` (game camera: follows Mario, auto-centers, player-controlled orbit, underwater mode with expanded pitch) and `FlyCamera` (debug camera: WASD + mouse). Shared `getProjectionMatrix()`.
 - `renderer.h/.cpp` — Static meshes (`Vertex3D`/`Mesh`/`Shader`) and skinned meshes (`SkinnedVertex`/`SkinnedMesh`/`SkinnedModel`/`SkinnedShader`). `loadGLB()` for static meshes (first mesh/first primitive). `loadSkinnedGLB()` reads skeleton, bone weights, and all animation clips from glTF. `renderSkinnedMesh()` uploads bone matrices and draws with GPU skinning. Debug grid/axis via `LineMesh`. `Shader` struct includes `u_alpha` uniform for transparency.
-- `world.h/.cpp` — `CollisionWorld` (spatial grid of triangles for terrain collision), `Phase5World` (interactive objects: `Phase5Object` platforms, `Phase5Pole` poles, `Collectible` coins/hearts, `TestEnemy`, `WaterVolume`). Surface types (Normal, Ice), slope classification (Walkable, Steep, Wall). Collision queries: `queryGround()`, `queryCeiling()`, `resolveHorizontalCollisions()`. Water: `findWaterVolume()` for AABB water region detection.
+- `world.h/.cpp` — `CollisionWorld` (spatial grid of triangles for terrain collision), `Phase5World` (interactive objects: `Phase5Object` platforms, `Phase5Pole` poles, `Collectible` coins/hearts/stars, `TestEnemy`, `WaterVolume`). Surface types (Normal, Ice), slope classification (Walkable, Steep, Wall). Collision queries: `queryGround()`, `queryCeiling()`, `resolveHorizontalCollisions()`. Water: `findWaterVolume()` for AABB water region detection.
+- `entity.h/.cpp` — Entity system for enemies. Base `Entity` struct with virtual `update()`, spawn/despawn by distance (50/60 unit hysteresis), shared physics helpers (`applyGravity()`, `resolveGround()`, `checkLedgeAhead()`). Concrete enemy types: `GoombaEntity` (patrol/charge/squish), `BobOmbEntity` (patrol/chase/fuse/explode, grabbable from behind), `KoopaTroopaEntity` (patrol/flee, drops blue coin), `BooEntity` (approach when Mario's back turned, transparent when faced). Each has an `EnemyAIState` enum driving its behavior.
+- `entityManager.h/.cpp` — `EntityManager` holds `vector<unique_ptr<Entity>>`. Handles `spawnDespawn()` with distance checks, `update()` all active entities, combat queries: `checkEnemyContact()`, `checkAttackHit()`, `findGrabbable()`, `defeatEnemy()`.
+- `course.h/.cpp` — JSON-driven course loading. `CourseDef` struct parsed from JSON (enemy spawns, collectibles, poles, water, platforms, star definitions). `LoadedCourse` loads visual+collision GLBs, populates a `Phase5World` and `EntityManager` from JSON data. `parseCourseDef()` uses nlohmann/json. Tracks red coin count and 100-coin star state per course session.
 - `hud.h/.cpp` — 2D HUD overlay via gl2d. `HudState` tracks course name display timer and low-health flash. `renderHud()` draws 8-segment power meter (pie chart), coin/star counters, lives display, and fading course name text.
 
 ### Shaders
 
 - `basic3d.vert/.frag` — MVP transform, vertex color, directional diffuse + ambient lighting. Has `u_alpha` uniform (default 1.0) for transparency support.
-- `skinned.vert/.frag` — Same lighting as basic3d, plus per-vertex bone matrix skinning (4 influences, `u_bones[64]` uniform array).
+- `skinned.vert/.frag` — Same lighting as basic3d, plus per-vertex bone matrix skinning (4 influences, `u_bones[64]` uniform array). Has `u_alpha` uniform for transparency (used by Boo enemies).
 - `debug_line.vert/.frag` — Simple passthrough for wireframe overlays.
 
 ### Frame Loop
 
-Physics runs on a fixed timestep (1/60s) with an accumulator in `gameLayer.cpp`. Each fixed tick: map input → `updatePhase5Objects()` → `mario.update()` → collectible/enemy checks → `hudState.update()` → `updateAnimState()`. Each variable frame: `orbitCamera.update()` → `evaluateAnimState()` (compute skin matrices) → render opaque geometry → render transparent water planes (with GL_BLEND) → render Mario (with invincibility flash) → debug overlays → 2D HUD (gl2d with depth test disabled) → ImGui. Key 1 toggles ImGui debug UI. Key 2 toggles fly camera.
+Physics runs on a fixed timestep (1/60s) with an accumulator in `gameLayer.cpp`. The game loop supports two modes: test level (hard-coded Phase5 entities) and course mode (JSON-loaded). Active collision world, Phase5World, and EntityManager are selected via `useCourse` flag.
+
+Each fixed tick: map input → `updatePhase5Objects()` → `mario.update()` → collectible/enemy checks → entity system (`spawnDespawn()` → `update()` → combat: stomp > attack > contact) → update entity animations → star objective checks (red coins, 100-coin) → `hudState.update()` → `updateAnimState()`.
+
+Each variable frame: `orbitCamera.update()` → `evaluateAnimState()` (compute skin matrices) → render level geometry (course mesh or test level) → render Phase5 objects/collectibles → render old test enemies → render entity system enemies (skinned models with per-entity animation, Boo transparency via `u_alpha`) → render transparent water planes → render Mario (with invincibility flash) → debug overlays → 2D HUD → ImGui.
+
+Key 1 toggles ImGui debug UI. Key 2 toggles fly camera. Key 5 toggles Bob-omb Battlefield course.
 
 ## Key Compile-Time Macros
 

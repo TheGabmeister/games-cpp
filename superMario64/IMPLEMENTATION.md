@@ -340,26 +340,26 @@ Surface swimming (A to paddle). Underwater free movement (A for burst, stick for
 
 Base `Entity` class with optional reusable components (Physics, AI, Health, Animator). Spawn/despawn by distance. AI behaviors: patrol (back-and-forth or loop), detection radius, chase (direct movement toward Mario), terrain-edge respect. Implement: Goomba (patrol → charge → squished), Bob-omb (patrol → chase → explode; grabbable from behind), Koopa Troopa (patrol → flee; shell drop), Boo (approach when Mario's back is turned, intangible when faced). Generic defeat → coin drop.
 
-- [ ] Enemies spawn when Mario approaches (within ~50 units) and despawn when Mario is far away.
-- [ ] Goomba: patrols a path. Charges Mario when close. Jump on it to defeat. Drops a yellow coin.
-- [ ] Bob-omb: patrols, chases Mario, explodes after a delay. Can be grabbed from behind and thrown.
-- [ ] Koopa Troopa: patrols, flees from Mario. Any attack defeats it. Drops shell (separate object). Drops blue coin.
-- [ ] Boo: approaches when Mario's back is turned. Stops/becomes transparent when Mario faces it. Defeat by turning and punching.
-- [ ] Ground enemies respect terrain edges (stop and turn at ledges, don't walk off).
-- [ ] Enemies that are defeated respawn when Mario leaves and re-enters their spawn radius.
-- [ ] Enemy contact damages Mario (if not attacking or invincible).
-- [ ] Attacking an enemy while jumping/punching/diving defeats it without taking damage.
+- [x] Enemies spawn when Mario approaches (within ~50 units) and despawn when Mario is far away.
+- [x] Goomba: patrols a path. Charges Mario when close. Jump on it to defeat. Drops a yellow coin.
+- [x] Bob-omb: patrols, chases Mario, explodes after a delay. Can be grabbed from behind and thrown.
+- [x] Koopa Troopa: patrols, flees from Mario. Any attack defeats it. Drops shell (separate object). Drops blue coin.
+- [x] Boo: approaches when Mario's back is turned. Stops/becomes transparent when Mario faces it. Defeat by turning and punching.
+- [x] Ground enemies respect terrain edges (stop and turn at ledges, don't walk off).
+- [x] Enemies that are defeated respawn when Mario leaves and re-enters their spawn radius.
+- [x] Enemy contact damages Mario (if not attacking or invincible).
+- [x] Attacking an enemy while jumping/punching/diving defeats it without taking damage.
 
 #### Phase 9 — Bob-omb Battlefield (First Playable Course)
 
 Level geometry + collision mesh from Blender script. Object placement via JSON. All 7 stars: King Bob-omb boss (grab from behind, throw 3×, must stay on summit), red coins, 100-coin star, Chain Chomp (ground-pound post to free), cannon (Bob-omb Buddy NPC unlocks, aim-and-launch UI), remaining mission stars. Star select screen on course entry. Course exit on star collection.
 
-- [ ] Course geometry loads and renders. Mario can walk around the entire level.
-- [ ] Collision mesh matches visual geometry (no falling through ground, walking through walls).
+- [x] Course geometry loads and renders. Mario can walk around the entire level.
+- [x] Collision mesh matches visual geometry (no falling through ground, walking through walls).
 - [ ] Star select screen appears when entering the course. Shows 6 mission names.
 - [ ] King Bob-omb boss: on the summit. Grab from behind, throw 3 times to defeat. Must throw on summit. Awards a star.
-- [ ] Red coins: 8 scattered in the level. Collecting all 8 spawns a star.
-- [ ] 100-coin star: Reaching 100 coins spawns a star at Mario's location.
+- [x] Red coins: 8 scattered in the level. Collecting all 8 spawns a star.
+- [x] 100-coin star: Reaching 100 coins spawns a star at Mario's location.
 - [ ] Chain Chomp: ground-pound the post to free it. Awards a star.
 - [ ] Cannon: Talk to Bob-omb Buddy NPC to unlock. Enter cannon, aim and launch Mario.
 - [ ] Collecting a star: plays star collect sequence, exits course, returns to hub/menu.

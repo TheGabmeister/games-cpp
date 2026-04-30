@@ -75,6 +75,7 @@ struct SkinnedShader
 	GLint u_model = -1;
 	GLint u_lightDir = -1;
 	GLint u_ambientStrength = -1;
+	GLint u_alpha = -1;
 	GLint u_bones[MAX_BONES] = {};
 };
 

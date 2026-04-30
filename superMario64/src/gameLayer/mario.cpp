@@ -1197,6 +1197,22 @@ bool Mario::isDead() const
 	return state == MarioState::DEATH;
 }
 
+bool Mario::isAttacking() const
+{
+	return state == MarioState::PUNCH_1 || state == MarioState::PUNCH_2 ||
+		state == MarioState::PUNCH_3_KICK || state == MarioState::JUMP_KICK ||
+		state == MarioState::DIVE || state == MarioState::SLIDE_KICK ||
+		state == MarioState::GROUND_POUND_FALL;
+}
+
+bool Mario::isStomping() const
+{
+	return !onGround && velocity.y < 0.f &&
+		(state == MarioState::SINGLE_JUMP || state == MarioState::DOUBLE_JUMP ||
+		state == MarioState::TRIPLE_JUMP || state == MarioState::FREEFALL ||
+		state == MarioState::GROUND_POUND_FALL);
+}
+
 void Mario::respawn()
 {
 	position = spawnPosition;

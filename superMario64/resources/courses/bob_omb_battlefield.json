@@ -1,0 +1,58 @@
+{
+    "name": "Bob-omb Battlefield",
+    "visualMesh": "courses/bob_omb_battlefield.glb",
+    "collisionMesh": "courses/bob_omb_battlefield.glb",
+    "marioSpawn": [0, 0, -35],
+    "marioSpawnAngle": 0,
+    "stars": [
+        {"index": 0, "name": "Big Bob-omb on the Summit"},
+        {"index": 1, "name": "Footrace with Koopa the Quick"},
+        {"index": 2, "name": "Shoot to the Island in the Sky"},
+        {"index": 3, "name": "Find the 8 Red Coins"},
+        {"index": 4, "name": "Mario Wings to the Sky"},
+        {"index": 5, "name": "Behind Chain Chomp's Gate"}
+    ],
+    "enemies": [
+        {"type": "goomba", "position": [5, 0, -20], "patrolA": [2, 0, -20], "patrolB": [8, 0, -20], "detectionRadius": 10},
+        {"type": "goomba", "position": [-5, 0, -18], "patrolA": [-8, 0, -18], "patrolB": [-2, 0, -18], "detectionRadius": 10},
+        {"type": "goomba", "position": [0, 0, -15], "patrolA": [-3, 0, -15], "patrolB": [3, 0, -15], "detectionRadius": 10},
+        {"type": "goomba", "position": [8, 0, -10], "patrolA": [5, 0, -10], "patrolB": [11, 0, -10], "detectionRadius": 10},
+        {"type": "bob_omb", "position": [-10, 0, 5], "patrolA": [-13, 0, 5], "patrolB": [-7, 0, 5], "detectionRadius": 12},
+        {"type": "bob_omb", "position": [10, 0, 10], "patrolA": [7, 0, 10], "patrolB": [13, 0, 10], "detectionRadius": 12},
+        {"type": "bob_omb", "position": [-5, 0, 15], "patrolA": [-8, 0, 15], "patrolB": [-2, 0, 15], "detectionRadius": 12},
+        {"type": "koopa_troopa", "position": [15, 0, -5], "patrolA": [12, 0, -5], "patrolB": [18, 0, -5], "detectionRadius": 8},
+        {"type": "koopa_troopa", "position": [-15, 0, 0], "patrolA": [-18, 0, 0], "patrolB": [-12, 0, 0], "detectionRadius": 8}
+    ],
+    "collectibles": [
+        {"type": "yellow_coin", "position": [3, 1, -30]},
+        {"type": "yellow_coin", "position": [6, 1, -30]},
+        {"type": "yellow_coin", "position": [9, 1, -30]},
+        {"type": "yellow_coin", "position": [-3, 1, -25]},
+        {"type": "yellow_coin", "position": [0, 1, -25]},
+        {"type": "yellow_coin", "position": [3, 1, -25]},
+        {"type": "yellow_coin", "position": [-8, 1, -10]},
+        {"type": "yellow_coin", "position": [-6, 1, -10]},
+        {"type": "yellow_coin", "position": [12, 1, 5]},
+        {"type": "yellow_coin", "position": [15, 1, 5]},
+        {"type": "yellow_coin", "position": [0, 5, 20]},
+        {"type": "yellow_coin", "position": [3, 7, 20]},
+        {"type": "yellow_coin", "position": [-3, 9, 20]},
+        {"type": "yellow_coin", "position": [0, 11, 20]},
+        {"type": "yellow_coin", "position": [2, 13, 20]},
+        {"type": "red_coin", "position": [10, 2, -15]},
+        {"type": "red_coin", "position": [-10, 2, -12]},
+        {"type": "red_coin", "position": [20, 1, 0]},
+        {"type": "red_coin", "position": [-18, 1, 10]},
+        {"type": "red_coin", "position": [5, 10, 20]},
+        {"type": "red_coin", "position": [-5, 15, 20]},
+        {"type": "red_coin", "position": [25, 1, -8]},
+        {"type": "red_coin", "position": [20, 16, 15]},
+        {"type": "blue_coin", "position": [0, 21, 20]},
+        {"type": "spinning_heart", "position": [0, 1, -32]}
+    ],
+    "poles": [
+        {"base": [-12, 0, 5], "height": 6},
+        {"base": [18, 0, -10], "height": 5}
+    ],
+    "water": []
+}

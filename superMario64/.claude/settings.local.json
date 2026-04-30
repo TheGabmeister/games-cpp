@@ -24,7 +24,12 @@
       "Bash(python3 -c ' *)",
       "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/mario.py)",
       "Bash(echo \"Exit: $?\")",
-      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python tools/models/mario.py)"
+      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python tools/models/mario.py)",
+      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/goomba.py)",
+      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/bob_omb.py)",
+      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/koopa_troopa.py)",
+      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/boo.py)",
+      "Bash(\"C:\\\\Program Files\\\\Blender Foundation\\\\Blender 5.1\\\\blender.exe\" --background --python c:/dev/games-cpp/superMario64/tools/models/bob_omb_battlefield.py)"
     ]
   }
 }

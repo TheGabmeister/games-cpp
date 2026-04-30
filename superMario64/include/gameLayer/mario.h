@@ -181,6 +181,9 @@ struct Mario
 	void die();
 	bool isInvincible() const;
 	bool isDead() const;
+	bool isAttacking() const;
+	bool isStomping() const;
+	glm::vec3 getFacingForward() const;
 	void respawn();
 
 private:
@@ -216,7 +219,6 @@ private:
 	void tryGroundJump(const GameInput &input, const glm::vec3 &cameraForward);
 	void enterState(MarioState newState);
 	float getHorizontalSpeed() const;
-	glm::vec3 getFacingForward() const;
 
 	void applyGroundMovement(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 	void applyAirMovement(const GameInput &input, float dt, const glm::vec3 &cameraForward);

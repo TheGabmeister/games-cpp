@@ -111,6 +111,7 @@ enum class CollectibleType
 	RedCoin,
 	BlueCoin,
 	SpinningHeart,
+	Star,
 };
 
 struct Collectible

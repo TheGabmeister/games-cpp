@@ -55,6 +55,7 @@ Mesh yellowCoinMesh;
 Mesh redCoinMesh;
 Mesh blueCoinMesh;
 Mesh heartMesh;
+Mesh enemyMesh;
 
 gl2d::Font hudFont;
 HudState hudState;
@@ -114,11 +115,13 @@ bool initGame()
 	}
 	initPhase5TestObjects(phase5World);
 	initPhase6Collectibles(phase5World);
+	initTestEnemies(phase5World);
 
 	yellowCoinMesh = createCube({1.f, 0.85f, 0.f});
 	redCoinMesh = createCube({1.f, 0.2f, 0.2f});
 	blueCoinMesh = createCube({0.2f, 0.4f, 1.f});
 	heartMesh = createCube({1.f, 0.4f, 0.7f});
+	enemyMesh = createCube({0.8f, 0.15f, 0.1f});
 
 	hudFont.createFromFile(RESOURCES_PATH "roboto_black.ttf");
 	hudState.showCourseName("Bob-omb Battlefield", "Star 1: Big Bob-omb on the Summit");
@@ -227,6 +230,10 @@ bool gameLogic(float deltaTime, platform::Input &input)
 				mario.healAccumulator = 0.f;
 			}
 
+			int enemyHit = checkEnemyContact(phase5World, mario.position, Mario::COLLISION_RADIUS);
+			if (enemyHit >= 0)
+				mario.takeDamage(1, phase5World.enemies[enemyHit].position);
+
 			hudState.update(FIXED_DT);
 
 			if (marioModelLoaded)
@@ -318,6 +325,14 @@ bool gameLogic(float deltaTime, platform::Input &input)
 				renderMesh(basicShader, heartMesh, model * glm::scale(glm::vec3(0.5f, 0.5f, 0.12f)), vp);
 				break;
 			}
+		}
+
+		// Test enemies
+		for (const TestEnemy &e : phase5World.enemies)
+		{
+			if (!e.active) continue;
+			glm::mat4 model = glm::translate(e.position) * glm::scale(glm::vec3(e.radius));
+			renderMesh(basicShader, enemyMesh, model, vp);
 		}
 	}
 
@@ -505,6 +520,7 @@ void closeGame()
 	destroyMesh(redCoinMesh);
 	destroyMesh(blueCoinMesh);
 	destroyMesh(heartMesh);
+	destroyMesh(enemyMesh);
 	if (testModelLoaded) destroyMesh(testModel);
 	if (phase4CollisionVisualLoaded) destroyMesh(phase4CollisionVisual);
 	if (marioModelLoaded) destroySkinnedMesh(marioModel.mesh);

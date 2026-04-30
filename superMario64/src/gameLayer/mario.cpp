@@ -1210,9 +1210,7 @@ void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForw
 	if (invincibilityTimer > 0.f)
 		invincibilityTimer = std::max(0.f, invincibilityTimer - dt);
 
-	if (!onGround)
-		airborneMaxY = std::max(airborneMaxY, position.y);
-	else
+	if (onGround)
 		airborneMaxY = position.y;
 
 	if (isDead())

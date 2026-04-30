@@ -123,11 +123,19 @@ struct Collectible
 	float spinAngle = 0.f;
 };
 
+struct TestEnemy
+{
+	glm::vec3 position = {};
+	float radius = 0.8f;
+	bool active = true;
+};
+
 struct Phase5World
 {
 	std::vector<Phase5Object> objects;
 	std::vector<Phase5Pole> poles;
 	std::vector<Collectible> collectibles;
+	std::vector<TestEnemy> enemies;
 	int carriedObject = -1;
 
 	void clear();
@@ -164,3 +172,6 @@ void initPhase6Collectibles(Phase5World &world);
 void updateCollectibles(Phase5World &world, float dt);
 int checkCollectiblePickup(Phase5World &world, const glm::vec3 &marioPos);
 bool checkSpinningHeart(const Phase5World &world, const glm::vec3 &marioPos);
+
+void initTestEnemies(Phase5World &world);
+int checkEnemyContact(const Phase5World &world, const glm::vec3 &marioPos, float marioRadius);

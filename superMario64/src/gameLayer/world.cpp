@@ -429,6 +429,7 @@ void Phase5World::clear()
 	objects.clear();
 	poles.clear();
 	collectibles.clear();
+	enemies.clear();
 	carriedObject = -1;
 }
 
@@ -812,4 +813,24 @@ bool checkSpinningHeart(const Phase5World &world, const glm::vec3 &marioPos)
 			return true;
 	}
 	return false;
+}
+
+void initTestEnemies(Phase5World &world)
+{
+	world.enemies.push_back({{5.f, 0.5f, -5.f}, 0.8f, true});
+	world.enemies.push_back({{-6.f, 0.5f, 6.f}, 0.8f, true});
+	world.enemies.push_back({{8.f, 0.5f, 8.f}, 0.8f, true});
+}
+
+int checkEnemyContact(const Phase5World &world, const glm::vec3 &marioPos, float marioRadius)
+{
+	for (int i = 0; i < (int)world.enemies.size(); i++)
+	{
+		const TestEnemy &e = world.enemies[i];
+		if (!e.active) continue;
+		float dist = glm::length(marioPos - e.position);
+		if (dist < e.radius + marioRadius)
+			return i;
+	}
+	return -1;
 }

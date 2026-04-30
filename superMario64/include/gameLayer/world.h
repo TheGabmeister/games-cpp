@@ -130,12 +130,20 @@ struct TestEnemy
 	bool active = true;
 };
 
+struct WaterVolume
+{
+	glm::vec3 minBounds = {};
+	glm::vec3 maxBounds = {};
+	float surfaceY = 0.f;
+};
+
 struct Phase5World
 {
 	std::vector<Phase5Object> objects;
 	std::vector<Phase5Pole> poles;
 	std::vector<Collectible> collectibles;
 	std::vector<TestEnemy> enemies;
+	std::vector<WaterVolume> waterVolumes;
 	int carriedObject = -1;
 
 	void clear();
@@ -175,3 +183,6 @@ bool checkSpinningHeart(const Phase5World &world, const glm::vec3 &marioPos);
 
 void initTestEnemies(Phase5World &world);
 int checkEnemyContact(const Phase5World &world, const glm::vec3 &marioPos, float marioRadius);
+
+void initPhase7Water(Phase5World &world);
+int findWaterVolume(const Phase5World &world, const glm::vec3 &position);

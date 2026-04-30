@@ -323,16 +323,16 @@ Wall jump. Ledge grab + climb. Pole/tree climbing. Object carrying + throwing. P
 
 Surface swimming (A to paddle). Underwater free movement (A for burst, stick for pitch/yaw). Reduced underwater gravity. Air meter (health meter drains ~1 segment per 4s). Air replenished by coins or surfacing. Drowning death. Water plane rendering (transparent quad). Camera: looser underwater follow, expanded pitch range.
 
-- [ ] Water plane renders as a transparent quad at the correct height.
-- [ ] Mario transitions to surface swimming on entering water. Press A to paddle forward.
-- [ ] Press Z on the surface: Mario dives underwater.
-- [ ] Underwater: A gives burst of speed. Stick controls pitch and yaw. Free 3D movement.
-- [ ] Health meter drains ~1 segment per 4 seconds while submerged (air meter).
-- [ ] Surfacing or collecting coins underwater replenishes air.
-- [ ] At 0 air/health: Mario drowns (death).
-- [ ] Reduced gravity underwater (Mario sinks slowly, not fast).
-- [ ] Camera follows more loosely underwater, expanded vertical pitch range.
-- [ ] Exiting water: Mario transitions back to ground movement. Appropriate splash effect state.
+- [x] Water plane renders as a transparent quad at the correct height.
+- [x] Mario transitions to surface swimming on entering water. Press A to paddle forward.
+- [x] Press Z on the surface: Mario dives underwater.
+- [x] Underwater: A gives burst of speed. Stick controls pitch and yaw. Free 3D movement.
+- [x] Health meter drains ~1 segment per 4 seconds while submerged (air meter).
+- [x] Surfacing or collecting coins underwater replenishes air.
+- [x] At 0 air/health: Mario drowns (death).
+- [x] Reduced gravity underwater (Mario sinks slowly, not fast).
+- [x] Camera follows more loosely underwater, expanded vertical pitch range.
+- [x] Exiting water: Mario transitions back to ground movement. Appropriate splash effect state.
 
 ### First Playable Loop (Phases 8–12)
 

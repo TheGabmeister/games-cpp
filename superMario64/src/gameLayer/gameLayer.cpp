@@ -56,6 +56,7 @@ Mesh redCoinMesh;
 Mesh blueCoinMesh;
 Mesh heartMesh;
 Mesh enemyMesh;
+Mesh waterPlaneMesh;
 
 gl2d::Font hudFont;
 HudState hudState;
@@ -116,6 +117,9 @@ bool initGame()
 	initPhase5TestObjects(phase5World);
 	initPhase6Collectibles(phase5World);
 	initTestEnemies(phase5World);
+	initPhase7Water(phase5World);
+
+	waterPlaneMesh = createGroundPlane(1.f, {0.2f, 0.4f, 0.85f});
 
 	yellowCoinMesh = createCube({1.f, 0.85f, 0.f});
 	redCoinMesh = createCube({1.f, 0.2f, 0.2f});
@@ -249,10 +253,11 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	// Orbit camera update (runs every frame for smooth following)
 	if (!useFlyCam)
 	{
+		bool marioUnderwater = (mario.state == MarioState::SWIMMING_UNDERWATER);
 		if (animViewerMode)
 			orbitCamera.update(currentInput, glm::vec3(0.f), 0.f, deltaTime);
 		else
-			orbitCamera.update(currentInput, mario.position, mario.facingAngle, deltaTime);
+			orbitCamera.update(currentInput, mario.position, mario.facingAngle, deltaTime, marioUnderwater);
 	}
 
 	// Evaluate animation for rendering
@@ -266,7 +271,25 @@ bool gameLogic(float deltaTime, platform::Input &input)
 
 	// ---- Rendering ----
 	glViewport(0, 0, w, h);
-	if (animViewerMode)
+	bool cameraUnderwater = false;
+	if (!animViewerMode)
+	{
+		glm::vec3 camPos = useFlyCam ? flyCamera.position : orbitCamera.currentPosition;
+		for (const WaterVolume &wv : phase5World.waterVolumes)
+		{
+			if (camPos.x >= wv.minBounds.x && camPos.x <= wv.maxBounds.x &&
+				camPos.z >= wv.minBounds.z && camPos.z <= wv.maxBounds.z &&
+				camPos.y <= wv.surfaceY)
+			{
+				cameraUnderwater = true;
+				break;
+			}
+		}
+	}
+
+	if (cameraUnderwater)
+		glClearColor(0.05f, 0.15f, 0.35f, 1.0f);
+	else if (animViewerMode)
 		glClearColor(0.15f, 0.15f, 0.2f, 1.0f);
 	else
 		glClearColor(0.4f, 0.6f, 0.9f, 1.0f);
@@ -334,6 +357,27 @@ bool gameLogic(float deltaTime, platform::Input &input)
 			glm::mat4 model = glm::translate(e.position) * glm::scale(glm::vec3(e.radius));
 			renderMesh(basicShader, enemyMesh, model, vp);
 		}
+
+		// Water planes (transparent)
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+		glDepthMask(GL_FALSE);
+		glUseProgram(basicShader.program);
+		if (basicShader.u_alpha >= 0)
+			glUniform1f(basicShader.u_alpha, 0.45f);
+		for (const WaterVolume &wv : phase5World.waterVolumes)
+		{
+			glm::vec3 center = (wv.minBounds + wv.maxBounds) * 0.5f;
+			center.y = wv.surfaceY;
+			float sizeX = wv.maxBounds.x - wv.minBounds.x;
+			float sizeZ = wv.maxBounds.z - wv.minBounds.z;
+			glm::mat4 model = glm::translate(center) * glm::scale(glm::vec3(sizeX, 1.f, sizeZ));
+			renderMesh(basicShader, waterPlaneMesh, model, vp);
+		}
+		if (basicShader.u_alpha >= 0)
+			glUniform1f(basicShader.u_alpha, 1.0f);
+		glDepthMask(GL_TRUE);
+		glDisable(GL_BLEND);
 	}
 
 	// Mario (skinned) — flash during invincibility
@@ -417,8 +461,11 @@ bool gameLogic(float deltaTime, platform::Input &input)
 
 		ImGui::Text("Health: %d/%d  Coins: %d  Stars: %d  Lives: %d",
 			mario.health, mario.maxHealth, mario.coins, mario.stars, mario.lives);
-		ImGui::Text("Invincible: %.2f  AirMaxY: %.2f",
-			mario.invincibilityTimer, mario.airborneMaxY);
+		ImGui::Text("Invincible: %.2f  AirMaxY: %.2f  Water: %d",
+			mario.invincibilityTimer, mario.airborneMaxY, mario.currentWaterVolume);
+		if (mario.state == MarioState::SWIMMING_SURFACE || mario.state == MarioState::SWIMMING_UNDERWATER)
+			ImGui::Text("AirTimer: %.1f  SwimPitch: %.1f  PreHealth: %d",
+				mario.airTimer, mario.swimPitch, mario.preSwimHealth);
 		if (ImGui::Button("Damage"))
 			mario.takeDamage(1, mario.position + glm::vec3(1, 0, 0));
 		ImGui::SameLine();
@@ -521,6 +568,7 @@ void closeGame()
 	destroyMesh(blueCoinMesh);
 	destroyMesh(heartMesh);
 	destroyMesh(enemyMesh);
+	destroyMesh(waterPlaneMesh);
 	if (testModelLoaded) destroyMesh(testModel);
 	if (phase4CollisionVisualLoaded) destroyMesh(phase4CollisionVisual);
 	if (marioModelLoaded) destroySkinnedMesh(marioModel.mesh);

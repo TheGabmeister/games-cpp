@@ -68,7 +68,7 @@ glm::mat4 OrbitCamera::getViewMatrix() const
 	return glm::lookAt(currentPosition, currentTarget, glm::vec3(0, 1, 0));
 }
 
-void OrbitCamera::update(const GameInput &input, glm::vec3 marioPos, float marioFacingAngle, float dt)
+void OrbitCamera::update(const GameInput &input, glm::vec3 marioPos, float marioFacingAngle, float dt, bool underwater)
 {
 	// Manual camera control
 	bool manualInput = (std::abs(input.cameraDelta.x) > 0.5f || std::abs(input.cameraDelta.y) > 0.5f);
@@ -83,21 +83,24 @@ void OrbitCamera::update(const GameInput &input, glm::vec3 marioPos, float mario
 		autoCenterTimer += dt;
 	}
 
-	pitch = std::clamp(pitch, 10.f, 70.f);
+	float pitchMin = underwater ? -30.f : 10.f;
+	float pitchMax = underwater ? 85.f : 70.f;
+	pitch = std::clamp(pitch, pitchMin, pitchMax);
+
+	float currentDistance = underwater ? 10.f : distance;
+	float currentSmoothing = underwater ? smoothing * 0.6f : smoothing;
+	float currentAutoCenterSpeed = underwater ? autoCenterSpeed * 0.5f : autoCenterSpeed;
 
 	// Auto-center behind Mario's facing direction
 	if (autoCenterTimer > autoCenterDelay && input.moveStrength > 0.1f)
 	{
-		// Mario forward is (sin(facing), 0, cos(facing)); orbit yaw offset is
-		// (cos(yaw), 0, sin(yaw)). Convert from Mario's +Z-based angle to the
-		// orbit camera's +X-based angle, then add 180 degrees to sit behind him.
 		float targetYaw = 270.f - marioFacingAngle;
 
 		float diff = targetYaw - yaw;
 		while (diff > 180.f) diff -= 360.f;
 		while (diff < -180.f) diff += 360.f;
 
-		yaw += diff * autoCenterSpeed * dt;
+		yaw += diff * currentAutoCenterSpeed * dt;
 	}
 
 	// Compute desired position from spherical coordinates
@@ -106,14 +109,14 @@ void OrbitCamera::update(const GameInput &input, glm::vec3 marioPos, float mario
 	float yr = glm::radians(yaw);
 	float pr = glm::radians(pitch);
 	glm::vec3 offset(
-		cos(yr) * cos(pr) * distance,
-		sin(pr) * distance,
-		sin(yr) * cos(pr) * distance
+		cos(yr) * cos(pr) * currentDistance,
+		sin(pr) * currentDistance,
+		sin(yr) * cos(pr) * currentDistance
 	);
 	glm::vec3 desiredPos = target + offset;
 
 	// Smooth interpolation
-	float t = 1.f - exp(-smoothing * dt);
+	float t = 1.f - exp(-currentSmoothing * dt);
 	currentPosition = glm::mix(currentPosition, desiredPos, t);
 	currentTarget = glm::mix(currentTarget, target, t);
 }

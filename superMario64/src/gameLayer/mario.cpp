@@ -44,6 +44,8 @@ const char *marioStateName(MarioState s)
 	case MarioState::LANDING: return "LANDING";
 	case MarioState::KNOCKBACK: return "KNOCKBACK";
 	case MarioState::DEATH: return "DEATH";
+	case MarioState::SWIMMING_SURFACE: return "SWIMMING_SURFACE";
+	case MarioState::SWIMMING_UNDERWATER: return "SWIMMING_UNDERWATER";
 	case MarioState::COUNT: break;
 	}
 	return "UNKNOWN";
@@ -106,6 +108,8 @@ static const char *stateToClipName(MarioState s)
 	case MarioState::LANDING: return "landing";
 	case MarioState::KNOCKBACK: return "knockback";
 	case MarioState::DEATH: return "death";
+	case MarioState::SWIMMING_SURFACE: return "swim_surface";
+	case MarioState::SWIMMING_UNDERWATER: return "swim_underwater";
 	case MarioState::COUNT: break;
 	}
 	return "idle";
@@ -262,6 +266,14 @@ void Mario::enterState(MarioState newState)
 		break;
 	case MarioState::DEATH:
 		deathTimer = DEATH_DURATION;
+		break;
+	case MarioState::SWIMMING_SURFACE:
+		velocity.y = 0.f;
+		onGround = false;
+		swimPitch = 0.f;
+		break;
+	case MarioState::SWIMMING_UNDERWATER:
+		onGround = false;
 		break;
 	default:
 		break;
@@ -1197,7 +1209,235 @@ void Mario::respawn()
 	carriedObject = -1;
 	activePole = -1;
 	currentPlatform = -1;
+	currentWaterVolume = -1;
+	airTimer = 0.f;
+	swimPitch = 0.f;
 	enterState(MarioState::IDLE);
+}
+
+// ---- Swimming ----
+
+void Mario::enterWater(float surfaceY)
+{
+	preSwimHealth = health;
+	airTimer = 0.f;
+	jumpChainCount = 0;
+	carriedObject = -1;
+	activePole = -1;
+
+	if (position.y >= surfaceY - HEIGHT * 0.5f)
+		enterState(MarioState::SWIMMING_SURFACE);
+	else
+		enterState(MarioState::SWIMMING_UNDERWATER);
+}
+
+void Mario::exitWater()
+{
+	currentWaterVolume = -1;
+	airTimer = 0.f;
+	swimPitch = 0.f;
+	health = std::max(health, preSwimHealth);
+}
+
+void Mario::updateSwimmingSurface(const GameInput &input, float dt, const glm::vec3 &cameraForward, Phase5World *phase5World)
+{
+	if (!phase5World || currentWaterVolume < 0 || currentWaterVolume >= (int)phase5World->waterVolumes.size())
+	{
+		exitWater();
+		enterState(MarioState::FREEFALL);
+		return;
+	}
+
+	const WaterVolume &wv = phase5World->waterVolumes[currentWaterVolume];
+	position.y = wv.surfaceY;
+	velocity.y = 0.f;
+
+	// Check if still in water volume horizontally
+	if (position.x < wv.minBounds.x || position.x > wv.maxBounds.x ||
+		position.z < wv.minBounds.z || position.z > wv.maxBounds.z)
+	{
+		exitWater();
+		enterState(MarioState::FREEFALL);
+		return;
+	}
+
+	// Jump out of water
+	if (input.jump)
+	{
+		velocity.y = SWIM_SURFACE_JUMP_VELOCITY;
+		exitWater();
+		onGround = false;
+		enterState(MarioState::SINGLE_JUMP);
+		return;
+	}
+
+	// Dive underwater
+	if (input.crouch)
+	{
+		velocity.y = -5.f;
+		position.y -= 0.5f;
+		enterState(MarioState::SWIMMING_UNDERWATER);
+		return;
+	}
+
+	// Horizontal movement
+	glm::vec3 wishDir = inputToWorldDir(input, cameraForward);
+	if (input.moveStrength > 0.01f)
+	{
+		float wishAngle = glm::degrees(atan2(wishDir.x, wishDir.z));
+		facingAngle = lerpAngle(facingAngle, wishAngle, TURN_SPEED * 0.5f * dt);
+
+		glm::vec2 hVel(velocity.x, velocity.z);
+		glm::vec2 wishVel = glm::vec2(wishDir.x, wishDir.z) * SWIM_SURFACE_SPEED * input.moveStrength;
+		glm::vec2 accel = wishVel - hVel;
+		float accelLen = glm::length(accel);
+		if (accelLen > 0.001f)
+		{
+			float maxAccel = GROUND_ACCEL * 0.5f * dt;
+			if (accelLen > maxAccel)
+				accel = accel / accelLen * maxAccel;
+			hVel += accel;
+		}
+		velocity.x = hVel.x;
+		velocity.z = hVel.y;
+	}
+	else
+	{
+		float decel = GROUND_DECEL * 0.5f * dt;
+		glm::vec2 hVel(velocity.x, velocity.z);
+		float hSpeed = glm::length(hVel);
+		if (hSpeed > decel)
+			hVel *= (hSpeed - decel) / hSpeed;
+		else
+			hVel = {0, 0};
+		velocity.x = hVel.x;
+		velocity.z = hVel.y;
+	}
+
+	// Paddle burst
+	if (input.attack)
+	{
+		float angle = glm::radians(facingAngle);
+		velocity.x = sinf(angle) * SWIM_PADDLE_BURST;
+		velocity.z = cosf(angle) * SWIM_PADDLE_BURST;
+	}
+}
+
+void Mario::updateSwimmingUnderwater(const GameInput &input, float dt, const glm::vec3 &cameraForward, Phase5World *phase5World)
+{
+	if (!phase5World || currentWaterVolume < 0 || currentWaterVolume >= (int)phase5World->waterVolumes.size())
+	{
+		exitWater();
+		enterState(MarioState::FREEFALL);
+		return;
+	}
+
+	const WaterVolume &wv = phase5World->waterVolumes[currentWaterVolume];
+
+	// Surface check
+	if (position.y >= wv.surfaceY)
+	{
+		position.y = wv.surfaceY;
+		health = maxHealth;
+		enterState(MarioState::SWIMMING_SURFACE);
+		return;
+	}
+
+	// Ground check — walk out of shallow water
+	if (onGround && position.y >= wv.surfaceY - HEIGHT)
+	{
+		exitWater();
+		enterState(MarioState::IDLE);
+		return;
+	}
+
+	// 3D swimming movement
+	glm::vec3 camFwd = glm::normalize(glm::vec3(cameraForward.x, 0.f, cameraForward.z));
+	glm::vec3 camRight = glm::normalize(glm::cross(camFwd, glm::vec3(0, 1, 0)));
+
+	if (input.moveStrength > 0.01f)
+	{
+		// Pitch control via vertical stick
+		swimPitch += input.moveDir.y * 120.f * dt;
+		swimPitch = std::clamp(swimPitch, -60.f, 60.f);
+
+		// Yaw from horizontal stick
+		float wishAngle = glm::degrees(atan2(
+			camFwd.x * input.moveDir.y + camRight.x * input.moveDir.x,
+			camFwd.z * input.moveDir.y + camRight.z * input.moveDir.x));
+		if (std::abs(input.moveDir.y) > 0.1f || std::abs(input.moveDir.x) > 0.1f)
+			facingAngle = lerpAngle(facingAngle, wishAngle, TURN_SPEED * 0.3f * dt);
+
+		// Swim direction: horizontal facing + vertical pitch
+		float pitchRad = glm::radians(swimPitch);
+		float fAngle = glm::radians(facingAngle);
+		glm::vec3 swimDir(
+			sinf(fAngle) * cosf(pitchRad),
+			sinf(pitchRad),
+			cosf(fAngle) * cosf(pitchRad));
+
+		glm::vec3 targetVel = swimDir * SWIM_UNDERWATER_SPEED * input.moveStrength;
+		glm::vec3 accel = targetVel - velocity;
+		float accelLen = glm::length(accel);
+		if (accelLen > 0.001f)
+		{
+			float maxAccel = AIR_ACCEL * 2.f * dt;
+			if (accelLen > maxAccel)
+				accel = accel / accelLen * maxAccel;
+			velocity += accel;
+		}
+	}
+	else
+	{
+		swimPitch *= (1.f - 3.f * dt);
+
+		// Decelerate
+		float speed = glm::length(velocity);
+		if (speed > 0.1f)
+			velocity *= std::max(0.f, 1.f - 3.f * dt);
+		else
+			velocity = {};
+	}
+
+	// Swim burst
+	if (input.jump)
+	{
+		float pitchRad = glm::radians(swimPitch);
+		float fAngle = glm::radians(facingAngle);
+		glm::vec3 burstDir(
+			sinf(fAngle) * cosf(pitchRad),
+			sinf(pitchRad),
+			cosf(fAngle) * cosf(pitchRad));
+		velocity = burstDir * SWIM_BURST_SPEED;
+	}
+
+	// Reduced gravity
+	velocity.y -= SWIM_GRAVITY * dt;
+	if (velocity.y < -SWIM_TERMINAL_VELOCITY)
+		velocity.y = -SWIM_TERMINAL_VELOCITY;
+
+	// Air drain
+	airTimer += dt;
+	if (airTimer >= AIR_DRAIN_INTERVAL)
+	{
+		airTimer -= AIR_DRAIN_INTERVAL;
+		health--;
+		if (health <= 0)
+		{
+			health = 0;
+			die();
+			return;
+		}
+	}
+
+	// Keep inside water volume bounds
+	position.x = std::clamp(position.x, wv.minBounds.x + COLLISION_RADIUS, wv.maxBounds.x - COLLISION_RADIUS);
+	position.z = std::clamp(position.z, wv.minBounds.z + COLLISION_RADIUS, wv.maxBounds.z - COLLISION_RADIUS);
+	if (position.y < wv.minBounds.y)
+	{
+		position.y = wv.minBounds.y;
+		velocity.y = std::max(velocity.y, 0.f);
+	}
 }
 
 // ---- Main Update ----
@@ -1227,7 +1467,8 @@ void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForw
 	bool controlledSpecialState = state == MarioState::LEDGE_HANG || state == MarioState::LEDGE_CLIMB ||
 		state == MarioState::POLE_GRAB || state == MarioState::POLE_CLIMB ||
 		state == MarioState::CARRY_IDLE || state == MarioState::CARRY_WALK ||
-		state == MarioState::THROW || state == MarioState::DROP;
+		state == MarioState::THROW || state == MarioState::DROP ||
+		state == MarioState::SWIMMING_SURFACE || state == MarioState::SWIMMING_UNDERWATER;
 
 	if (!controlledSpecialState && phase5World)
 	{
@@ -1320,15 +1561,31 @@ void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForw
 	case MarioState::LANDING:            updateLanding(input, dt, cameraForward); break;
 	case MarioState::KNOCKBACK:          updateKnockback(input, dt, cameraForward); break;
 	case MarioState::DEATH:              break;
+	case MarioState::SWIMMING_SURFACE:   updateSwimmingSurface(input, dt, cameraForward, phase5World); break;
+	case MarioState::SWIMMING_UNDERWATER: updateSwimmingUnderwater(input, dt, cameraForward, phase5World); break;
 	}
 
 	position += velocity * dt;
 
-	if (position.y < VOID_DEATH_Y && !isDead())
+	bool isSwimming = state == MarioState::SWIMMING_SURFACE || state == MarioState::SWIMMING_UNDERWATER;
+
+	if (position.y < VOID_DEATH_Y && !isDead() && !isSwimming)
 	{
 		die();
 		return;
 	}
 
-	resolveCollision(world, phase5World, dt, previousPosition);
+	if (!isSwimming)
+		resolveCollision(world, phase5World, dt, previousPosition);
+
+	// Water entry detection
+	if (!isSwimming && !isDead() && phase5World)
+	{
+		int waterVol = findWaterVolume(*phase5World, position);
+		if (waterVol >= 0)
+		{
+			currentWaterVolume = waterVol;
+			enterWater(phase5World->waterVolumes[waterVol].surfaceY);
+		}
+	}
 }

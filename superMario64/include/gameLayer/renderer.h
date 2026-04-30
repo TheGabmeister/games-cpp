@@ -65,6 +65,7 @@ struct Shader
 	GLint u_lightDir = -1;
 	GLint u_ambientStrength = -1;
 	GLint u_vp = -1;
+	GLint u_alpha = -1;
 };
 
 struct SkinnedShader

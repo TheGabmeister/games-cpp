@@ -74,6 +74,7 @@ Shader loadShader(const char *vertPath, const char *fragPath)
 	s.u_lightDir = glGetUniformLocation(s.program, "u_lightDir");
 	s.u_ambientStrength = glGetUniformLocation(s.program, "u_ambientStrength");
 	s.u_vp = glGetUniformLocation(s.program, "u_vp");
+	s.u_alpha = glGetUniformLocation(s.program, "u_alpha");
 
 	return s;
 }

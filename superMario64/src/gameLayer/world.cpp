@@ -430,6 +430,7 @@ void Phase5World::clear()
 	poles.clear();
 	collectibles.clear();
 	enemies.clear();
+	waterVolumes.clear();
 	carriedObject = -1;
 }
 
@@ -830,6 +831,30 @@ int checkEnemyContact(const Phase5World &world, const glm::vec3 &marioPos, float
 		if (!e.active) continue;
 		float dist = glm::length(marioPos - e.position);
 		if (dist < e.radius + marioRadius)
+			return i;
+	}
+	return -1;
+}
+
+// ---- Water ----
+
+void initPhase7Water(Phase5World &world)
+{
+	WaterVolume pool;
+	pool.minBounds = {-20.f, -5.f, 18.f};
+	pool.maxBounds = {20.f, 1.5f, 35.f};
+	pool.surfaceY = 1.5f;
+	world.waterVolumes.push_back(pool);
+}
+
+int findWaterVolume(const Phase5World &world, const glm::vec3 &position)
+{
+	for (int i = 0; i < (int)world.waterVolumes.size(); i++)
+	{
+		const WaterVolume &wv = world.waterVolumes[i];
+		if (position.x >= wv.minBounds.x && position.x <= wv.maxBounds.x &&
+			position.z >= wv.minBounds.z && position.z <= wv.maxBounds.z &&
+			position.y <= wv.surfaceY && position.y >= wv.minBounds.y)
 			return i;
 	}
 	return -1;

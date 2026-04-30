@@ -44,6 +44,8 @@ enum class MarioState
 	LANDING,
 	KNOCKBACK,
 	DEATH,
+	SWIMMING_SURFACE,
+	SWIMMING_UNDERWATER,
 	COUNT,
 };
 
@@ -103,6 +105,12 @@ struct Mario
 	glm::vec3 spawnPosition = {0.f, 0.f, 0.f};
 	float healAccumulator = 0.f;
 
+	// Swimming
+	float airTimer = 0.f;
+	int preSwimHealth = 8;
+	int currentWaterVolume = -1;
+	float swimPitch = 0.f;
+
 	// Movement constants
 	static constexpr float WALK_SPEED = 8.f;
 	static constexpr float RUN_SPEED = 16.f;
@@ -151,6 +159,16 @@ struct Mario
 	static constexpr float DEATH_DURATION = 2.f;
 	static constexpr float KNOCKBACK_SPEED = 12.f;
 
+	// Swimming constants
+	static constexpr float SWIM_SURFACE_SPEED = 10.f;
+	static constexpr float SWIM_PADDLE_BURST = 14.f;
+	static constexpr float SWIM_UNDERWATER_SPEED = 8.f;
+	static constexpr float SWIM_BURST_SPEED = 16.f;
+	static constexpr float SWIM_GRAVITY = GRAVITY * 0.15f;
+	static constexpr float SWIM_TERMINAL_VELOCITY = 5.f;
+	static constexpr float AIR_DRAIN_INTERVAL = 4.f;
+	static constexpr float SWIM_SURFACE_JUMP_VELOCITY = 18.f;
+
 	AnimState animState;
 
 	void update(const GameInput &input, float dt, const glm::vec3 &cameraForward,
@@ -189,6 +207,10 @@ private:
 	void updateLanding(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 	void updateKnockback(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 	void updateDeath(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateSwimmingSurface(const GameInput &input, float dt, const glm::vec3 &cameraForward, Phase5World *phase5World);
+	void updateSwimmingUnderwater(const GameInput &input, float dt, const glm::vec3 &cameraForward, Phase5World *phase5World);
+	void enterWater(float surfaceY);
+	void exitWater();
 
 	void resolveCollision(const CollisionWorld *world, Phase5World *phase5World, float dt, const glm::vec3 &previousPosition);
 	void tryGroundJump(const GameInput &input, const glm::vec3 &cameraForward);

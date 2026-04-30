@@ -38,7 +38,7 @@ struct OrbitCamera
 	glm::vec3 currentTarget = {};
 
 	glm::mat4 getViewMatrix() const;
-	void update(const GameInput &input, glm::vec3 marioPos, float marioFacingAngle, float dt);
+	void update(const GameInput &input, glm::vec3 marioPos, float marioFacingAngle, float dt, bool underwater = false);
 };
 
 glm::mat4 getProjectionMatrix(float aspect);

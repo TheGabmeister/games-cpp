@@ -120,7 +120,7 @@ bool initGame()
 	flyCamera.pitch = -15.f;
 
 	// Initialize orbit camera behind Mario
-	orbitCamera.currentPosition = {0.f, 4.f, 8.f};
+	orbitCamera.currentPosition = {0.f, 4.f, -8.f};
 	orbitCamera.currentTarget = {0.f, 1.f, 0.f};
 
 	glEnable(GL_DEPTH_TEST);

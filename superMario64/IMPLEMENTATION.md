@@ -274,19 +274,19 @@ All jump variants (double, triple, long, backflip, side somersault). Crouch, cra
 
 Collision mesh loading (separate simplified glTF per level). Uniform-grid spatial partition. Wall detection + sliding. Ceiling detection + head bonk. Slope behavior (walkable < 30°, steep 30–50°, wall > 50°). Surface types (normal, ice). Step-up tolerance for small ledges.
 
-- [ ] Collision mesh loads from a separate simplified GLB (logged on startup).
-- [ ] Mario walks on level geometry surfaces, not just Y=0.
-- [ ] Coyote time: Walk off an edge, press jump within ~5 frames. Mario still gets a grounded jump instead of falling.
-- [ ] Without coyote: Walk off edge, wait a moment, press jump — nothing happens (Mario freefalls).
-- [ ] Mario slides along walls instead of stopping dead or passing through.
-- [ ] Mario bonks on ceilings during jumps (velocity zeroed, starts falling).
-- [ ] Walkable slopes (< 30°): Mario walks up and down normally.
-- [ ] Steep slopes (30–50°): Mario slides downhill if standing still. Can run up if fast enough.
-- [ ] Wall-like slopes (> 50°): Mario cannot stand on them, treated as walls.
-- [ ] Small ledges (< 0.3 units): Mario steps up without jumping.
-- [ ] Mario snaps to ground on downward slopes (doesn't hover or bounce).
-- [ ] Ice surface: greatly reduced friction, Mario slides and turns sluggishly.
-- [ ] Debug collision overlay (if implemented): wireframe of collision mesh visible.
+- [x] Collision mesh loads from a separate simplified GLB (logged on startup).
+- [x] Mario walks on level geometry surfaces, not just Y=0.
+- [x] Coyote time: Walk off an edge, press jump within ~5 frames. Mario still gets a grounded jump instead of falling.
+- [x] Without coyote: Walk off edge, wait a moment, press jump — nothing happens (Mario freefalls).
+- [x] Mario slides along walls instead of stopping dead or passing through.
+- [x] Mario bonks on ceilings during jumps (velocity zeroed, starts falling).
+- [x] Walkable slopes (< 30°): Mario walks up and down normally.
+- [x] Steep slopes (30–50°): Mario slides downhill if standing still. Can run up if fast enough.
+- [x] Wall-like slopes (> 50°): Mario cannot stand on them, treated as walls.
+- [x] Small ledges (< 0.3 units): Mario steps up without jumping.
+- [x] Mario snaps to ground on downward slopes (doesn't hover or bounce).
+- [x] Ice surface: greatly reduced friction, Mario slides and turns sluggishly.
+- [x] Debug collision overlay (if implemented): wireframe of collision mesh visible.
 
 #### Phase 5 — Advanced Movement & Interactions
 

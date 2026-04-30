@@ -88,7 +88,10 @@ void OrbitCamera::update(const GameInput &input, glm::vec3 marioPos, float mario
 	// Auto-center behind Mario's facing direction
 	if (autoCenterTimer > autoCenterDelay && input.moveStrength > 0.1f)
 	{
-		float targetYaw = marioFacingAngle + 180.f;
+		// Mario forward is (sin(facing), 0, cos(facing)); orbit yaw offset is
+		// (cos(yaw), 0, sin(yaw)). Convert from Mario's +Z-based angle to the
+		// orbit camera's +X-based angle, then add 180 degrees to sit behind him.
+		float targetYaw = 270.f - marioFacingAngle;
 
 		float diff = targetYaw - yaw;
 		while (diff > 180.f) diff -= 360.f;

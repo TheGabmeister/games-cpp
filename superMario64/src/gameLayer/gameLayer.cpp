@@ -46,6 +46,7 @@ LineMesh collisionWireMesh;
 bool collisionWorldLoaded = false;
 bool collisionWireMeshLoaded = false;
 bool showCollisionOverlay = true;
+Phase5World phase5World;
 
 LineMesh gridMesh;
 LineMesh axisMesh;
@@ -94,14 +95,15 @@ bool initGame()
 
 	testModel = loadGLB(RESOURCES_PATH "models/test_scene.glb");
 	testModelLoaded = (testModel.vao != 0);
-	phase4CollisionVisual = loadGLB(RESOURCES_PATH "courses/phase4_collision.glb");
+	phase4CollisionVisual = loadGLB(RESOURCES_PATH "courses/phase5_interactions.glb");
 	phase4CollisionVisualLoaded = (phase4CollisionVisual.vao != 0);
-	collisionWorldLoaded = loadCollisionWorldGLB(RESOURCES_PATH "courses/phase4_collision.glb", collisionWorld);
+	collisionWorldLoaded = loadCollisionWorldGLB(RESOURCES_PATH "courses/phase5_interactions.glb", collisionWorld);
 	if (collisionWorldLoaded)
 	{
 		collisionWireMesh = createCollisionWireMesh(collisionWorld);
 		collisionWireMeshLoaded = (collisionWireMesh.vao != 0);
 	}
+	initPhase5TestObjects(phase5World);
 
 	marioModel = loadSkinnedGLB(RESOURCES_PATH "models/mario.glb");
 	marioModelLoaded = (marioModel.mesh.vao != 0);
@@ -174,7 +176,8 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		if (!animViewerMode)
 		{
 			glm::vec3 camFwd = getOrbitCameraForward();
-			mario.update(currentInput, FIXED_DT, camFwd, collisionWorldLoaded ? &collisionWorld : nullptr);
+			updatePhase5Objects(phase5World, FIXED_DT, mario.position, mario.groundPoundImpact);
+			mario.update(currentInput, FIXED_DT, camFwd, collisionWorldLoaded ? &collisionWorld : nullptr, &phase5World);
 
 			if (marioModelLoaded)
 				updateAnimState(mario.animState, marioModel.clips, FIXED_DT);
@@ -229,6 +232,20 @@ bool gameLogic(float deltaTime, platform::Input &input)
 			renderMesh(basicShader, testModel, glm::mat4(1.f), vp);
 		if (phase4CollisionVisualLoaded)
 			renderMesh(basicShader, phase4CollisionVisual, glm::mat4(1.f), vp);
+		for (const Phase5Object &object : phase5World.objects)
+		{
+			if (!object.active)
+				continue;
+			glm::mat4 model = glm::translate(object.position) *
+				glm::scale(object.halfExtents * 2.f);
+			renderMesh(basicShader, cubes[(int)object.type % 5], model, vp);
+		}
+		for (const Phase5Pole &pole : phase5World.poles)
+		{
+			glm::mat4 model = glm::translate(pole.base + glm::vec3(0.f, pole.height * 0.5f, 0.f)) *
+				glm::scale(glm::vec3(pole.radius * 2.f, pole.height, pole.radius * 2.f));
+			renderMesh(basicShader, cubes[3], model, vp);
+		}
 	}
 
 	// Mario (skinned)
@@ -288,6 +305,9 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		ImGui::Text("Collision World: %s  tris=%d cells=%d",
 			collisionWorldLoaded ? "loaded" : "missing",
 			collisionWorld.triangleCount(), collisionWorld.occupiedCellCount());
+		ImGui::Text("Phase5: objects=%d poles=%d carried=%d platform=%d wall=%.2f",
+			(int)phase5World.objects.size(), (int)phase5World.poles.size(),
+			mario.carriedObject, mario.currentPlatform, mario.wallContactTimer);
 		ImGui::Text("Press 1: toggle debug UI");
 		ImGui::Text("Press 2: fly camera (%s)", useFlyCam ? "ON" : "OFF");
 		ImGui::Text("Press 4: anim viewer (%s)", animViewerMode ? "ON" : "OFF");

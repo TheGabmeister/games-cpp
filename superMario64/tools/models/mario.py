@@ -1,4 +1,4 @@
-"""Generate Mario model with armature and 24 animations.
+"""Generate Mario model with armature and Phase 1-5 animations.
 Output: resources/models/mario.glb
 Run: blender --background --python tools/models/mario.py
 
@@ -236,7 +236,7 @@ def push_to_nla(armature_obj, action):
 # ---- Animation Definitions ----
 
 def create_animations(armature_obj):
-    """Create all 24 animations as NLA tracks."""
+    """Create gameplay animations as NLA tracks."""
     bpy.context.view_layer.objects.active = armature_obj
     if not armature_obj.animation_data:
         armature_obj.animation_data_create()
@@ -607,6 +607,118 @@ def create_animations(armature_obj):
     set_bone_rotation(armature_obj, 'Spine', (10, 0, 0), 2)
     set_bone_location(armature_obj, 'Root', (0, 0, -0.08), 2)
     reset_pose(armature_obj, 6)
+    push_to_nla(armature_obj, action)
+
+    # 25. wall_slide
+    action = create_action(armature_obj, 'wall_slide')
+    reset_pose(armature_obj, 1)
+    set_bone_rotation(armature_obj, 'Spine', (10, 0, 12), 3)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-80, 0, -45), 3)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-80, 0, 45), 3)
+    set_bone_rotation(armature_obj, 'UpperLeg.L', (-20, 0, -15), 3)
+    set_bone_rotation(armature_obj, 'UpperLeg.R', (20, 0, 15), 3)
+    reset_pose(armature_obj, 12)
+    push_to_nla(armature_obj, action)
+
+    # 26. wall_jump
+    action = create_action(armature_obj, 'wall_jump')
+    reset_pose(armature_obj, 1)
+    set_bone_rotation(armature_obj, 'Root', (0, 0, -25), 4)
+    set_bone_rotation(armature_obj, 'UpperLeg.L', (-55, 0, 0), 4)
+    set_bone_rotation(armature_obj, 'UpperLeg.R', (35, 0, 0), 4)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-100, 0, -25), 4)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-80, 0, 25), 4)
+    reset_pose(armature_obj, 14)
+    push_to_nla(armature_obj, action)
+
+    # 27. ledge_hang
+    action = create_action(armature_obj, 'ledge_hang')
+    reset_pose(armature_obj, 1)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-135, 0, -20), 3)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-135, 0, 20), 3)
+    set_bone_rotation(armature_obj, 'Spine', (20, 0, 0), 3)
+    set_bone_location(armature_obj, 'Root', (0, 0, -0.15), 3)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-135, 0, -20), 12)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-135, 0, 20), 12)
+    set_bone_location(armature_obj, 'Root', (0, 0, -0.15), 12)
+    push_to_nla(armature_obj, action)
+
+    # 28. ledge_climb
+    action = create_action(armature_obj, 'ledge_climb')
+    reset_pose(armature_obj, 1)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-130, 0, -20), 2)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-130, 0, 20), 2)
+    set_bone_location(armature_obj, 'Root', (0, 0, -0.15), 2)
+    set_bone_rotation(armature_obj, 'UpperLeg.L', (-50, 0, 0), 8)
+    set_bone_rotation(armature_obj, 'UpperLeg.R', (-30, 0, 0), 8)
+    set_bone_location(armature_obj, 'Root', (0, 0, 0.1), 8)
+    reset_pose(armature_obj, 14)
+    push_to_nla(armature_obj, action)
+
+    # 29. pole_climb
+    action = create_action(armature_obj, 'pole_climb')
+    reset_pose(armature_obj, 1)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-120, 0, -25), 1)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-80, 0, 25), 1)
+    set_bone_rotation(armature_obj, 'UpperLeg.L', (-60, 0, 15), 1)
+    set_bone_rotation(armature_obj, 'UpperLeg.R', (-20, 0, -15), 1)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-80, 0, -25), 12)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-120, 0, 25), 12)
+    set_bone_rotation(armature_obj, 'UpperLeg.L', (-20, 0, 15), 12)
+    set_bone_rotation(armature_obj, 'UpperLeg.R', (-60, 0, -15), 12)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-120, 0, -25), 24)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-80, 0, 25), 24)
+    set_bone_rotation(armature_obj, 'UpperLeg.L', (-60, 0, 15), 24)
+    set_bone_rotation(armature_obj, 'UpperLeg.R', (-20, 0, -15), 24)
+    push_to_nla(armature_obj, action)
+
+    # 30. carry_idle
+    action = create_action(armature_obj, 'carry_idle')
+    reset_pose(armature_obj, 1)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-70, 0, -20), 3)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-70, 0, 20), 3)
+    set_bone_rotation(armature_obj, 'LowerArm.L', (-65, 0, 0), 3)
+    set_bone_rotation(armature_obj, 'LowerArm.R', (-65, 0, 0), 3)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-70, 0, -20), 24)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-70, 0, 20), 24)
+    push_to_nla(armature_obj, action)
+
+    # 31. carry_walk
+    action = create_action(armature_obj, 'carry_walk')
+    reset_pose(armature_obj, 1)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-70, 0, -20), 1)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-70, 0, 20), 1)
+    set_bone_rotation(armature_obj, 'UpperLeg.L', (-25, 0, 0), 1)
+    set_bone_rotation(armature_obj, 'UpperLeg.R', (25, 0, 0), 1)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-70, 0, -20), 12)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-70, 0, 20), 12)
+    set_bone_rotation(armature_obj, 'UpperLeg.L', (25, 0, 0), 12)
+    set_bone_rotation(armature_obj, 'UpperLeg.R', (-25, 0, 0), 12)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-70, 0, -20), 24)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-70, 0, 20), 24)
+    set_bone_rotation(armature_obj, 'UpperLeg.L', (-25, 0, 0), 24)
+    set_bone_rotation(armature_obj, 'UpperLeg.R', (25, 0, 0), 24)
+    push_to_nla(armature_obj, action)
+
+    # 32. throw
+    action = create_action(armature_obj, 'throw')
+    reset_pose(armature_obj, 1)
+    set_bone_rotation(armature_obj, 'Spine', (20, 0, 0), 3)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-120, 0, -20), 3)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-120, 0, 20), 3)
+    set_bone_rotation(armature_obj, 'Spine', (-25, 0, 0), 7)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (50, 0, -20), 7)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (50, 0, 20), 7)
+    reset_pose(armature_obj, 12)
+    push_to_nla(armature_obj, action)
+
+    # 33. drop
+    action = create_action(armature_obj, 'drop')
+    reset_pose(armature_obj, 1)
+    set_bone_rotation(armature_obj, 'UpperArm.L', (-50, 0, -20), 4)
+    set_bone_rotation(armature_obj, 'UpperArm.R', (-50, 0, 20), 4)
+    set_bone_rotation(armature_obj, 'Spine', (15, 0, 0), 4)
+    reset_pose(armature_obj, 10)
     push_to_nla(armature_obj, action)
 
     bpy.ops.object.mode_set(mode='OBJECT')

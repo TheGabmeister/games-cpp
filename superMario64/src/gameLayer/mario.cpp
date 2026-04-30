@@ -31,7 +31,18 @@ const char *marioStateName(MarioState s)
 	case MarioState::DIVE: return "DIVE";
 	case MarioState::BELLY_SLIDE: return "BELLY_SLIDE";
 	case MarioState::SLIDE_KICK: return "SLIDE_KICK";
+	case MarioState::WALL_SLIDE: return "WALL_SLIDE";
+	case MarioState::WALL_JUMP: return "WALL_JUMP";
+	case MarioState::LEDGE_HANG: return "LEDGE_HANG";
+	case MarioState::LEDGE_CLIMB: return "LEDGE_CLIMB";
+	case MarioState::POLE_GRAB: return "POLE_GRAB";
+	case MarioState::POLE_CLIMB: return "POLE_CLIMB";
+	case MarioState::CARRY_IDLE: return "CARRY_IDLE";
+	case MarioState::CARRY_WALK: return "CARRY_WALK";
+	case MarioState::THROW: return "THROW";
+	case MarioState::DROP: return "DROP";
 	case MarioState::LANDING: return "LANDING";
+	case MarioState::COUNT: break;
 	}
 	return "UNKNOWN";
 }
@@ -80,14 +91,25 @@ static const char *stateToClipName(MarioState s)
 	case MarioState::DIVE: return "dive";
 	case MarioState::BELLY_SLIDE: return "belly_slide";
 	case MarioState::SLIDE_KICK: return "slide_kick";
+	case MarioState::WALL_SLIDE: return "wall_slide";
+	case MarioState::WALL_JUMP: return "wall_jump";
+	case MarioState::LEDGE_HANG: return "ledge_hang";
+	case MarioState::LEDGE_CLIMB: return "ledge_climb";
+	case MarioState::POLE_GRAB: return "pole_climb";
+	case MarioState::POLE_CLIMB: return "pole_climb";
+	case MarioState::CARRY_IDLE: return "carry_idle";
+	case MarioState::CARRY_WALK: return "carry_walk";
+	case MarioState::THROW: return "throw";
+	case MarioState::DROP: return "drop";
 	case MarioState::LANDING: return "landing";
+	case MarioState::COUNT: break;
 	}
 	return "idle";
 }
 
 void Mario::setAnimClips(const SkinnedModel &model)
 {
-	for (int i = 0; i < 24; i++)
+	for (int i = 0; i < (int)MarioState::COUNT; i++)
 	{
 		const char *name = stateToClipName((MarioState)i);
 		auto it = model.clipNameToIndex.find(name);
@@ -107,9 +129,19 @@ float Mario::getHorizontalSpeed() const
 	return glm::length(glm::vec2(velocity.x, velocity.z));
 }
 
-GroundResult Mario::checkGround(const CollisionWorld *world, float maxAbove, float maxBelow) const
+glm::vec3 Mario::getFacingForward() const
+{
+	float angle = glm::radians(facingAngle);
+	return glm::normalize(glm::vec3(sinf(angle), 0.f, cosf(angle)));
+}
+
+GroundResult Mario::checkGround(const CollisionWorld *world, Phase5World *phase5World,
+	float previousY, float maxAbove, float maxBelow, int *platformIndex) const
 {
 	GroundResult r;
+	if (platformIndex)
+		*platformIndex = -1;
+
 	if (world && world->isLoaded())
 	{
 		CollisionHit hit;
@@ -121,10 +153,26 @@ GroundResult Mario::checkGround(const CollisionWorld *world, float maxAbove, flo
 			r.surface = hit.surface;
 			r.slopeClass = hit.slopeClass;
 		}
-		return r;
 	}
 
-	if (position.y <= maxAbove)
+	if (phase5World)
+	{
+		CollisionHit platformHit;
+		int hitObject = -1;
+		if (queryPhase5PlatformGround(*phase5World, position, previousY, COLLISION_RADIUS, maxAbove, maxBelow, platformHit, hitObject) &&
+			(!r.hit || platformHit.y > r.groundY))
+		{
+			r.hit = true;
+			r.groundY = platformHit.y;
+			r.normal = platformHit.normal;
+			r.surface = platformHit.surface;
+			r.slopeClass = platformHit.slopeClass;
+			if (platformIndex)
+				*platformIndex = hitObject;
+		}
+	}
+
+	if ((!world || !world->isLoaded()) && !r.hit && position.y <= maxAbove)
 	{
 		r.hit = true;
 		r.groundY = 0.f;
@@ -190,6 +238,21 @@ void Mario::enterState(MarioState newState)
 		break;
 	case MarioState::SLIDE_KICK:
 		break;
+	case MarioState::LEDGE_HANG:
+		velocity = {};
+		break;
+	case MarioState::LEDGE_CLIMB:
+		velocity = {};
+		ledgeTimer = 0.25f;
+		break;
+	case MarioState::POLE_GRAB:
+	case MarioState::POLE_CLIMB:
+		velocity = {};
+		break;
+	case MarioState::THROW:
+	case MarioState::DROP:
+		actionTimer = 0.2f;
+		break;
 	default:
 		break;
 	}
@@ -204,7 +267,8 @@ void Mario::applyGravity(const GameInput &input, float dt)
 	bool canVaryHeight = (state == MarioState::SINGLE_JUMP ||
 	                      state == MarioState::DOUBLE_JUMP ||
 	                      state == MarioState::BACKFLIP ||
-	                      state == MarioState::SIDE_SOMERSAULT);
+	                      state == MarioState::SIDE_SOMERSAULT ||
+	                      state == MarioState::WALL_JUMP);
 	if (canVaryHeight && input.jumpHeld && velocity.y > 0.f)
 		g = GRAVITY_HELD;
 
@@ -317,6 +381,7 @@ void Mario::updateInputBuffers(const GameInput &input, float dt)
 		coyoteTimer = COYOTE_TIME;
 	else
 		coyoteTimer = std::max(0.f, coyoteTimer - dt);
+	wallContactTimer = std::max(0.f, wallContactTimer - dt);
 
 	jumpChainTimer += dt;
 
@@ -397,6 +462,7 @@ void Mario::tryGroundJump(const GameInput &input, const glm::vec3 &cameraForward
 	// Single jump (default)
 	velocity.y = JUMP_VELOCITY;
 	onGround = false;
+	currentPlatform = -1;
 	jumpChainCount = 1;
 	enterState(MarioState::SINGLE_JUMP);
 }
@@ -410,14 +476,25 @@ static bool isAirborneState(MarioState state)
 		state == MarioState::BACKFLIP || state == MarioState::SIDE_SOMERSAULT ||
 		state == MarioState::FREEFALL || state == MarioState::GROUND_POUND_SPIN ||
 		state == MarioState::GROUND_POUND_FALL || state == MarioState::JUMP_KICK ||
-		state == MarioState::DIVE || state == MarioState::SLIDE_KICK;
+		state == MarioState::DIVE || state == MarioState::SLIDE_KICK ||
+		state == MarioState::WALL_SLIDE || state == MarioState::WALL_JUMP;
 }
 
-void Mario::resolveCollision(const CollisionWorld *world, float dt, const glm::vec3 &previousPosition)
+void Mario::resolveCollision(const CollisionWorld *world, Phase5World *phase5World, float dt, const glm::vec3 &previousPosition)
 {
+	if (state == MarioState::LEDGE_HANG || state == MarioState::LEDGE_CLIMB ||
+		state == MarioState::POLE_GRAB || state == MarioState::POLE_CLIMB)
+		return;
+
 	if (world && world->isLoaded())
 	{
-		resolveHorizontalCollisions(*world, position, velocity, COLLISION_RADIUS, HEIGHT, STEP_HEIGHT);
+		glm::vec3 hitWallNormal;
+		resolveHorizontalCollisions(*world, position, velocity, COLLISION_RADIUS, HEIGHT, STEP_HEIGHT, &hitWallNormal);
+		if (glm::length(hitWallNormal) > 0.001f)
+		{
+			lastWallNormal = hitWallNormal;
+			wallContactTimer = 0.12f;
+		}
 
 		if (velocity.y > 0.f)
 		{
@@ -444,7 +521,8 @@ void Mario::resolveCollision(const CollisionWorld *world, float dt, const glm::v
 		maxBelow = std::max(0.25f, std::max(0.f, previousPosition.y - position.y) + 0.2f);
 	}
 
-	GroundResult ground = checkGround(world, maxAbove, maxBelow);
+	int platformIndex = -1;
+	GroundResult ground = checkGround(world, phase5World, previousPosition.y, maxAbove, maxBelow, &platformIndex);
 
 	if (ground.hit && velocity.y <= 0.f)
 	{
@@ -453,6 +531,19 @@ void Mario::resolveCollision(const CollisionWorld *world, float dt, const glm::v
 		groundNormal = ground.normal;
 		groundSurface = ground.surface;
 		groundSlope = ground.slopeClass;
+		currentPlatform = platformIndex;
+		if (phase5World && platformIndex >= 0 && platformIndex < (int)phase5World->objects.size())
+		{
+			Phase5Object &platform = phase5World->objects[platformIndex];
+			glm::vec3 platformDelta = platform.position - platform.previousPosition;
+			position += platformDelta;
+			if (platform.type == Phase5ObjectType::TiltingPlatform &&
+				(std::abs(platform.tiltX) > 18.f || std::abs(platform.tiltZ) > 18.f))
+			{
+				velocity.x += -platform.tiltZ * 0.03f;
+				velocity.z += platform.tiltX * 0.03f;
+			}
+		}
 
 		if (ground.slopeClass == SlopeClass::Steep)
 		{
@@ -480,6 +571,7 @@ void Mario::resolveCollision(const CollisionWorld *world, float dt, const glm::v
 			if (state == MarioState::GROUND_POUND_FALL)
 			{
 				onGround = true;
+				groundPoundImpact = true;
 				enterState(MarioState::GROUND_POUND_LAND);
 				return;
 			}
@@ -510,6 +602,7 @@ void Mario::resolveCollision(const CollisionWorld *world, float dt, const glm::v
 		groundNormal = {0.f, 1.f, 0.f};
 		groundSurface = SurfaceType::Normal;
 		groundSlope = SlopeClass::Walkable;
+		currentPlatform = -1;
 
 		if (onGround)
 		{
@@ -747,7 +840,7 @@ void Mario::updateAirborne(const GameInput &input, float dt, const glm::vec3 &ca
 	// Transition ascending → freefall
 	if ((state == MarioState::SINGLE_JUMP || state == MarioState::DOUBLE_JUMP ||
 	     state == MarioState::TRIPLE_JUMP || state == MarioState::BACKFLIP ||
-	     state == MarioState::SIDE_SOMERSAULT) && velocity.y <= 0.f)
+	     state == MarioState::SIDE_SOMERSAULT || state == MarioState::WALL_JUMP) && velocity.y <= 0.f)
 	{
 		enterState(MarioState::FREEFALL);
 	}
@@ -827,6 +920,140 @@ void Mario::updateSlideKick(const GameInput &input, float dt, const glm::vec3 &c
 	}
 }
 
+void Mario::updateWallSlide(const GameInput &input, float dt, const glm::vec3 &cameraForward)
+{
+	if (jumpBufferTimer > 0.f && wallContactTimer > 0.f)
+	{
+		jumpBufferTimer = 0.f;
+		velocity = lastWallNormal * WALL_JUMP_HORIZONTAL + glm::vec3(0.f, WALL_JUMP_VERTICAL, 0.f);
+		float angle = glm::degrees(atan2(lastWallNormal.x, lastWallNormal.z));
+		facingAngle = angle;
+		onGround = false;
+		enterState(MarioState::WALL_JUMP);
+		return;
+	}
+
+	if (wallContactTimer <= 0.f)
+	{
+		enterState(MarioState::FREEFALL);
+		return;
+	}
+
+	applyAirMovement(input, dt, cameraForward);
+	applyGravity(input, dt);
+	if (velocity.y < -5.f)
+		velocity.y = -5.f;
+}
+
+void Mario::updateLedgeHang(const GameInput &input, float dt, const glm::vec3 &cameraForward)
+{
+	position = ledgeTarget - lastWallNormal * COLLISION_RADIUS;
+	velocity = {};
+	onGround = false;
+
+	if (input.crouchHeld || input.moveDir.y < -0.5f)
+	{
+		enterState(MarioState::FREEFALL);
+		return;
+	}
+
+	if (input.jump || input.moveDir.y > 0.5f)
+	{
+		enterState(MarioState::LEDGE_CLIMB);
+	}
+}
+
+void Mario::updateLedgeClimb(const GameInput &input, float dt, const glm::vec3 &cameraForward)
+{
+	ledgeTimer -= dt;
+	position = glm::mix(position, ledgeTarget + lastWallNormal * 0.25f, 1.f - std::exp(-12.f * dt));
+	velocity = {};
+	if (ledgeTimer <= 0.f)
+	{
+		position = ledgeTarget + lastWallNormal * 0.25f;
+		onGround = true;
+		enterState(MarioState::IDLE);
+	}
+}
+
+void Mario::updatePole(const GameInput &input, float dt, const glm::vec3 &cameraForward, Phase5World *phase5World)
+{
+	if (!phase5World || activePole < 0 || activePole >= (int)phase5World->poles.size())
+	{
+		activePole = -1;
+		enterState(MarioState::FREEFALL);
+		return;
+	}
+
+	const Phase5Pole &pole = phase5World->poles[activePole];
+	glm::vec2 fromPole(position.x - pole.base.x, position.z - pole.base.z);
+	if (glm::length(fromPole) < 0.001f)
+		fromPole = {0.f, -1.f};
+	fromPole = glm::normalize(fromPole);
+
+	position.x = pole.base.x + fromPole.x * (pole.radius + COLLISION_RADIUS);
+	position.z = pole.base.z + fromPole.y * (pole.radius + COLLISION_RADIUS);
+	position.y = std::clamp(position.y + input.moveDir.y * POLE_CLIMB_SPEED * dt, pole.base.y, pole.base.y + pole.height - HEIGHT * 0.5f);
+	velocity = {};
+	onGround = false;
+	state = std::abs(input.moveDir.y) > 0.1f ? MarioState::POLE_CLIMB : MarioState::POLE_GRAB;
+
+	if (input.crouchHeld)
+	{
+		activePole = -1;
+		enterState(MarioState::FREEFALL);
+		return;
+	}
+
+	if (input.jump)
+	{
+		glm::vec3 away(fromPole.x, 0.f, fromPole.y);
+		velocity = away * 13.f + glm::vec3(0.f, 20.f, 0.f);
+		activePole = -1;
+		enterState(MarioState::SINGLE_JUMP);
+	}
+}
+
+void Mario::updateCarry(const GameInput &input, float dt, const glm::vec3 &cameraForward, Phase5World *phase5World)
+{
+	actionTimer = std::max(0.f, actionTimer - dt);
+	if (!phase5World || carriedObject < 0)
+	{
+		carriedObject = -1;
+		enterState(MarioState::IDLE);
+		return;
+	}
+
+	if (input.attack && actionTimer <= 0.f)
+	{
+		glm::vec3 forward = getFacingForward();
+		throwCarriedObject(*phase5World, carriedObject, forward * 18.f + glm::vec3(0.f, 8.f, 0.f));
+		carriedObject = -1;
+		enterState(MarioState::THROW);
+		return;
+	}
+
+	if (input.crouchHeld)
+	{
+		setCarriedObject(*phase5World, carriedObject, false);
+		carriedObject = -1;
+		enterState(MarioState::DROP);
+		return;
+	}
+
+	applyGroundMovement(input, dt, cameraForward);
+	state = getHorizontalSpeed() > 0.2f ? MarioState::CARRY_WALK : MarioState::CARRY_IDLE;
+	moveCarriedObject(*phase5World, carriedObject, position + getFacingForward() * 0.85f + glm::vec3(0.f, 0.75f, 0.f));
+}
+
+void Mario::updateThrowDrop(const GameInput &input, float dt, const glm::vec3 &cameraForward, Phase5World *phase5World)
+{
+	actionTimer -= dt;
+	decelerateHorizontal(velocity, GROUND_DECEL * dt);
+	if (actionTimer <= 0.f)
+		enterState(MarioState::IDLE);
+}
+
 void Mario::updateLanding(const GameInput &input, float dt, const glm::vec3 &cameraForward)
 {
 	landingTimer -= dt;
@@ -845,10 +1072,70 @@ void Mario::updateLanding(const GameInput &input, float dt, const glm::vec3 &cam
 
 // ---- Main Update ----
 
-void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForward, const CollisionWorld *world)
+void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForward,
+	const CollisionWorld *world, Phase5World *phase5World)
 {
+	groundPoundImpact = false;
 	updateInputBuffers(input, dt);
 	glm::vec3 previousPosition = position;
+
+	bool controlledSpecialState = state == MarioState::LEDGE_HANG || state == MarioState::LEDGE_CLIMB ||
+		state == MarioState::POLE_GRAB || state == MarioState::POLE_CLIMB ||
+		state == MarioState::CARRY_IDLE || state == MarioState::CARRY_WALK ||
+		state == MarioState::THROW || state == MarioState::DROP;
+
+	if (!controlledSpecialState && phase5World)
+	{
+		if (!onGround)
+		{
+			int pole = findNearestPole(*phase5World, position, 0.25f);
+			if (pole >= 0)
+			{
+				activePole = pole;
+				enterState(MarioState::POLE_GRAB);
+				controlledSpecialState = true;
+			}
+		}
+
+		if (!controlledSpecialState && onGround && input.attack && carriedObject < 0)
+		{
+			int objectIndex = findNearestCarriable(*phase5World, position, getFacingForward(), 1.4f);
+			if (objectIndex >= 0)
+			{
+				carriedObject = objectIndex;
+				setCarriedObject(*phase5World, objectIndex, true);
+				actionTimer = 0.15f;
+				enterState(MarioState::CARRY_IDLE);
+				controlledSpecialState = true;
+			}
+		}
+	}
+
+	if (!controlledSpecialState && !onGround && wallContactTimer > 0.f)
+	{
+		if (jumpBufferTimer > 0.f)
+		{
+			jumpBufferTimer = 0.f;
+			velocity = lastWallNormal * WALL_JUMP_HORIZONTAL + glm::vec3(0.f, WALL_JUMP_VERTICAL, 0.f);
+			facingAngle = glm::degrees(atan2(lastWallNormal.x, lastWallNormal.z));
+			enterState(MarioState::WALL_JUMP);
+		}
+		else if (velocity.y < 0.f && world && world->isLoaded())
+		{
+			glm::vec3 probe = position + lastWallNormal * 0.75f + glm::vec3(0.f, 1.2f, 0.f);
+			CollisionHit ledgeGround;
+			if (queryGround(*world, probe, COLLISION_RADIUS, 0.8f, 1.8f, ledgeGround))
+			{
+				ledgeTarget = {probe.x, ledgeGround.y, probe.z};
+				enterState(MarioState::LEDGE_HANG);
+				controlledSpecialState = true;
+			}
+			else
+			{
+				enterState(MarioState::WALL_SLIDE);
+			}
+		}
+	}
 
 	switch (state)
 	{
@@ -869,6 +1156,16 @@ void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForw
 	case MarioState::LONG_JUMP:          updateLongJump(input, dt, cameraForward); break;
 	case MarioState::GROUND_POUND_SPIN:  updateGroundPoundSpin(input, dt, cameraForward); break;
 	case MarioState::GROUND_POUND_FALL:  updateGroundPoundFall(input, dt, cameraForward); break;
+	case MarioState::WALL_SLIDE:         updateWallSlide(input, dt, cameraForward); break;
+	case MarioState::WALL_JUMP:          updateAirborne(input, dt, cameraForward); break;
+	case MarioState::LEDGE_HANG:         updateLedgeHang(input, dt, cameraForward); break;
+	case MarioState::LEDGE_CLIMB:        updateLedgeClimb(input, dt, cameraForward); break;
+	case MarioState::POLE_GRAB:
+	case MarioState::POLE_CLIMB:         updatePole(input, dt, cameraForward, phase5World); break;
+	case MarioState::CARRY_IDLE:
+	case MarioState::CARRY_WALK:         updateCarry(input, dt, cameraForward, phase5World); break;
+	case MarioState::THROW:
+	case MarioState::DROP:               updateThrowDrop(input, dt, cameraForward, phase5World); break;
 	case MarioState::GROUND_POUND_LAND:
 	case MarioState::PUNCH_1:
 	case MarioState::PUNCH_2:
@@ -879,5 +1176,5 @@ void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForw
 	}
 
 	position += velocity * dt;
-	resolveCollision(world, dt, previousPosition);
+	resolveCollision(world, phase5World, dt, previousPosition);
 }

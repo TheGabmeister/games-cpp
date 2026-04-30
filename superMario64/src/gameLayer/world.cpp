@@ -252,8 +252,12 @@ bool queryCeiling(const CollisionWorld &world, const glm::vec3 &position,
 }
 
 void resolveHorizontalCollisions(const CollisionWorld &world, glm::vec3 &position,
-	glm::vec3 &velocity, float radius, float height, float stepHeight)
+	glm::vec3 &velocity, float radius, float height, float stepHeight,
+	glm::vec3 *lastWallNormal)
 {
+	if (lastWallNormal)
+		*lastWallNormal = {0.f, 0.f, 0.f};
+
 	std::vector<int> candidates;
 	world.queryTrianglesXZ({position.x, position.z}, radius + 0.5f, candidates);
 
@@ -283,6 +287,8 @@ void resolveHorizontalCollisions(const CollisionWorld &world, glm::vec3 &positio
 
 			float push = radius - std::abs(dist);
 			position += pushDir * (push + 0.001f);
+			if (lastWallNormal)
+				*lastWallNormal = pushDir;
 
 			glm::vec3 hVel(velocity.x, 0.f, velocity.z);
 			float into = glm::dot(hVel, pushDir);
@@ -413,6 +419,300 @@ LineMesh createCollisionWireMesh(const CollisionWorld &world)
 		vertices.push_back({tri.v2, color});
 		vertices.push_back({tri.v2, color});
 		vertices.push_back({tri.v0, color});
+	}
+
+	return createLineMesh(vertices);
+}
+
+void Phase5World::clear()
+{
+	objects.clear();
+	poles.clear();
+	carriedObject = -1;
+}
+
+const char *phase5ObjectTypeName(Phase5ObjectType type)
+{
+	switch (type)
+	{
+	case Phase5ObjectType::MovingPlatform: return "MovingPlatform";
+	case Phase5ObjectType::FallingPlatform: return "FallingPlatform";
+	case Phase5ObjectType::TiltingPlatform: return "TiltingPlatform";
+	case Phase5ObjectType::OneWayPlatform: return "OneWayPlatform";
+	case Phase5ObjectType::BreakablePlatform: return "BreakablePlatform";
+	case Phase5ObjectType::Carriable: return "Carriable";
+	}
+	return "Unknown";
+}
+
+static Phase5Object makeObject(Phase5ObjectType type, glm::vec3 position, glm::vec3 halfExtents)
+{
+	Phase5Object object;
+	object.type = type;
+	object.position = position;
+	object.previousPosition = position;
+	object.startPosition = position;
+	object.endPosition = position;
+	object.halfExtents = halfExtents;
+	return object;
+}
+
+void initPhase5TestObjects(Phase5World &world)
+{
+	world.clear();
+
+	Phase5Object moving = makeObject(Phase5ObjectType::MovingPlatform, {-12.f, 1.f, 13.f}, {1.8f, 0.18f, 1.8f});
+	moving.startPosition = {-12.f, 1.f, 13.f};
+	moving.endPosition = {-4.f, 1.f, 13.f};
+	world.objects.push_back(moving);
+
+	world.objects.push_back(makeObject(Phase5ObjectType::FallingPlatform, {-2.f, 1.5f, 13.f}, {1.6f, 0.18f, 1.6f}));
+	world.objects.push_back(makeObject(Phase5ObjectType::TiltingPlatform, {4.f, 1.2f, 13.f}, {2.2f, 0.18f, 2.2f}));
+	world.objects.push_back(makeObject(Phase5ObjectType::OneWayPlatform, {10.f, 2.2f, 13.f}, {2.f, 0.12f, 2.f}));
+	world.objects.push_back(makeObject(Phase5ObjectType::BreakablePlatform, {15.f, 1.4f, 13.f}, {1.7f, 0.18f, 1.7f}));
+	world.objects.push_back(makeObject(Phase5ObjectType::Carriable, {-5.f, 0.5f, 5.f}, {0.45f, 0.45f, 0.45f}));
+
+	world.poles.push_back({{-12.f, 0.f, 5.f}, 4.f, 0.35f});
+}
+
+void updatePhase5Objects(Phase5World &world, float dt, const glm::vec3 &marioPosition, bool marioGroundPounded)
+{
+	for (int i = 0; i < (int)world.objects.size(); i++)
+	{
+		Phase5Object &object = world.objects[i];
+		object.previousPosition = object.position;
+
+		if (!object.active)
+		{
+			object.respawnTimer -= dt;
+			if (object.respawnTimer <= 0.f)
+			{
+				object.active = true;
+				object.triggered = false;
+				object.timer = 0.f;
+				object.position = object.startPosition;
+				object.velocity = {};
+			}
+			continue;
+		}
+
+		if (object.carried)
+			continue;
+
+		switch (object.type)
+		{
+		case Phase5ObjectType::MovingPlatform:
+		{
+			object.timer += dt;
+			float t = (std::sin(object.timer * 1.2f) + 1.f) * 0.5f;
+			object.position = glm::mix(object.startPosition, object.endPosition, t);
+			object.velocity = (object.position - object.previousPosition) / std::max(dt, 0.0001f);
+			break;
+		}
+		case Phase5ObjectType::FallingPlatform:
+			if (object.triggered)
+			{
+				object.timer += dt;
+				if (object.timer > 0.4f)
+				{
+					object.velocity.y -= 18.f * dt;
+					object.position += object.velocity * dt;
+					if (object.position.y < -8.f)
+					{
+						object.active = false;
+						object.respawnTimer = 3.f;
+					}
+				}
+			}
+			break;
+		case Phase5ObjectType::TiltingPlatform:
+		{
+			glm::vec3 local = marioPosition - object.position;
+			object.tiltX = std::clamp(local.z / object.halfExtents.z, -1.f, 1.f) * 25.f;
+			object.tiltZ = std::clamp(-local.x / object.halfExtents.x, -1.f, 1.f) * 25.f;
+			break;
+		}
+		case Phase5ObjectType::BreakablePlatform:
+			if (marioGroundPounded && std::abs(marioPosition.x - object.position.x) <= object.halfExtents.x &&
+				std::abs(marioPosition.z - object.position.z) <= object.halfExtents.z &&
+				std::abs(marioPosition.y - (object.position.y + object.halfExtents.y)) < 0.35f)
+			{
+				object.active = false;
+				object.respawnTimer = 3.f;
+			}
+			break;
+		case Phase5ObjectType::Carriable:
+			object.velocity.y -= 20.f * dt;
+			object.position += object.velocity * dt;
+			if (object.position.y < object.halfExtents.y)
+			{
+				object.position.y = object.halfExtents.y;
+				object.velocity.y = 0.f;
+				object.velocity.x *= 0.9f;
+				object.velocity.z *= 0.9f;
+			}
+			break;
+		case Phase5ObjectType::OneWayPlatform:
+			break;
+		}
+	}
+}
+
+bool queryPhase5PlatformGround(Phase5World &world, const glm::vec3 &position, float previousY,
+	float radius, float maxAbove, float maxBelow, CollisionHit &hit, int &objectIndex)
+{
+	bool found = false;
+	float bestY = -std::numeric_limits<float>::max();
+	objectIndex = -1;
+
+	for (int i = 0; i < (int)world.objects.size(); i++)
+	{
+		Phase5Object &object = world.objects[i];
+		if (!object.active || object.type == Phase5ObjectType::Carriable || object.carried)
+			continue;
+
+		float topY = object.position.y + object.halfExtents.y;
+		if (object.type == Phase5ObjectType::OneWayPlatform && previousY < topY - 0.02f)
+			continue;
+		if (std::abs(position.x - object.position.x) > object.halfExtents.x + radius ||
+			std::abs(position.z - object.position.z) > object.halfExtents.z + radius)
+			continue;
+		if (topY > position.y + maxAbove || topY < position.y - maxBelow)
+			continue;
+
+		if (!found || topY > bestY)
+		{
+			found = true;
+			bestY = topY;
+			objectIndex = i;
+			hit.hit = true;
+			hit.y = topY;
+			hit.point = {position.x, topY, position.z};
+			hit.normal = {0.f, 1.f, 0.f};
+			hit.surface = SurfaceType::Normal;
+			hit.slopeClass = SlopeClass::Walkable;
+		}
+	}
+
+	if (found && objectIndex >= 0 && world.objects[objectIndex].type == Phase5ObjectType::FallingPlatform)
+		world.objects[objectIndex].triggered = true;
+
+	return found;
+}
+
+int findNearestPole(const Phase5World &world, const glm::vec3 &position, float grabRadius)
+{
+	int best = -1;
+	float bestDist = grabRadius;
+	for (int i = 0; i < (int)world.poles.size(); i++)
+	{
+		const Phase5Pole &pole = world.poles[i];
+		if (position.y < pole.base.y || position.y > pole.base.y + pole.height)
+			continue;
+
+		float dist = glm::length(glm::vec2(position.x - pole.base.x, position.z - pole.base.z)) - pole.radius;
+		if (dist < bestDist)
+		{
+			best = i;
+			bestDist = dist;
+		}
+	}
+	return best;
+}
+
+int findNearestCarriable(const Phase5World &world, const glm::vec3 &position, const glm::vec3 &forward, float radius)
+{
+	int best = -1;
+	float bestScore = radius;
+	for (int i = 0; i < (int)world.objects.size(); i++)
+	{
+		const Phase5Object &object = world.objects[i];
+		if (!object.active || object.carried || object.type != Phase5ObjectType::Carriable)
+			continue;
+
+		glm::vec3 toObject = object.position - position;
+		toObject.y = 0.f;
+		float dist = glm::length(toObject);
+		if (dist > radius || dist < 0.001f)
+			continue;
+		if (glm::dot(glm::normalize(toObject), forward) < 0.2f)
+			continue;
+		if (dist < bestScore)
+		{
+			best = i;
+			bestScore = dist;
+		}
+	}
+	return best;
+}
+
+void setCarriedObject(Phase5World &world, int objectIndex, bool carried)
+{
+	if (objectIndex < 0 || objectIndex >= (int)world.objects.size())
+		return;
+	world.objects[objectIndex].carried = carried;
+	world.objects[objectIndex].velocity = {};
+	world.carriedObject = carried ? objectIndex : -1;
+}
+
+void moveCarriedObject(Phase5World &world, int objectIndex, const glm::vec3 &position)
+{
+	if (objectIndex < 0 || objectIndex >= (int)world.objects.size())
+		return;
+	world.objects[objectIndex].position = position;
+}
+
+void throwCarriedObject(Phase5World &world, int objectIndex, const glm::vec3 &velocity)
+{
+	if (objectIndex < 0 || objectIndex >= (int)world.objects.size())
+		return;
+	world.objects[objectIndex].carried = false;
+	world.objects[objectIndex].velocity = velocity;
+	if (world.carriedObject == objectIndex)
+		world.carriedObject = -1;
+}
+
+static void addBoxLines(std::vector<LineVertex> &vertices, glm::vec3 center, glm::vec3 halfExtents, glm::vec3 color)
+{
+	glm::vec3 p[8] = {
+		center + glm::vec3(-halfExtents.x, -halfExtents.y, -halfExtents.z),
+		center + glm::vec3( halfExtents.x, -halfExtents.y, -halfExtents.z),
+		center + glm::vec3( halfExtents.x, -halfExtents.y,  halfExtents.z),
+		center + glm::vec3(-halfExtents.x, -halfExtents.y,  halfExtents.z),
+		center + glm::vec3(-halfExtents.x,  halfExtents.y, -halfExtents.z),
+		center + glm::vec3( halfExtents.x,  halfExtents.y, -halfExtents.z),
+		center + glm::vec3( halfExtents.x,  halfExtents.y,  halfExtents.z),
+		center + glm::vec3(-halfExtents.x,  halfExtents.y,  halfExtents.z),
+	};
+	int edges[12][2] = {{0,1},{1,2},{2,3},{3,0},{4,5},{5,6},{6,7},{7,4},{0,4},{1,5},{2,6},{3,7}};
+	for (auto &edge : edges)
+	{
+		vertices.push_back({p[edge[0]], color});
+		vertices.push_back({p[edge[1]], color});
+	}
+}
+
+LineMesh createPhase5DebugMesh(const Phase5World &world)
+{
+	std::vector<LineVertex> vertices;
+	for (const Phase5Object &object : world.objects)
+	{
+		if (!object.active)
+			continue;
+		glm::vec3 color(0.9f, 0.9f, 0.2f);
+		if (object.type == Phase5ObjectType::Carriable) color = {1.f, 0.45f, 0.2f};
+		if (object.type == Phase5ObjectType::OneWayPlatform) color = {0.4f, 0.8f, 1.f};
+		if (object.type == Phase5ObjectType::BreakablePlatform) color = {1.f, 0.25f, 0.25f};
+		addBoxLines(vertices, object.position, object.halfExtents, color);
+	}
+
+	for (const Phase5Pole &pole : world.poles)
+	{
+		glm::vec3 bottom = pole.base;
+		glm::vec3 top = pole.base + glm::vec3(0.f, pole.height, 0.f);
+		glm::vec3 color(0.8f, 0.5f, 0.25f);
+		vertices.push_back({bottom, color});
+		vertices.push_back({top, color});
 	}
 
 	return createLineMesh(vertices);

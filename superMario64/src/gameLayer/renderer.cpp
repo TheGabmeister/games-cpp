@@ -672,7 +672,8 @@ SkinnedModel loadSkinnedGLB(const char *path)
 
 		// Mark looping clips by name convention
 		if (clip.name == "idle" || clip.name == "walk" || clip.name == "run" ||
-		    clip.name == "freefall" || clip.name == "crawl" || clip.name == "belly_slide")
+		    clip.name == "freefall" || clip.name == "crawl" || clip.name == "belly_slide" ||
+		    clip.name == "pole_climb" || clip.name == "carry_idle" || clip.name == "carry_walk")
 			clip.looping = true;
 
 		model.clipNameToIndex[clip.name] = (int)model.clips.size();
@@ -746,4 +747,3 @@ void renderLines(const Shader &shader, const LineMesh &mesh, const glm::mat4 &vp
 	glDrawArrays(GL_LINES, 0, mesh.vertexCount);
 	glBindVertexArray(0);
 }
-

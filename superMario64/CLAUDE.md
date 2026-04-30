@@ -43,9 +43,9 @@ New gameplay code goes in the game layer. The platform layer owns the main loop 
 - `camera.h/.cpp` — `OrbitCamera` (game camera: follows Mario, auto-centers, player-controlled orbit, underwater mode with expanded pitch) and `FlyCamera` (debug camera: WASD + mouse). Shared `getProjectionMatrix()`.
 - `renderer.h/.cpp` — Static meshes (`Vertex3D`/`Mesh`/`Shader`) and skinned meshes (`SkinnedVertex`/`SkinnedMesh`/`SkinnedModel`/`SkinnedShader`). `loadGLB()` for static meshes (first mesh/first primitive). `loadSkinnedGLB()` reads skeleton, bone weights, and all animation clips from glTF. `renderSkinnedMesh()` uploads bone matrices and draws with GPU skinning. Debug grid/axis via `LineMesh`. `Shader` struct includes `u_alpha` uniform for transparency.
 - `world.h/.cpp` — `CollisionWorld` (spatial grid of triangles for terrain collision), `Phase5World` (interactive objects: `Phase5Object` platforms, `Phase5Pole` poles, `Collectible` coins/hearts/stars, `TestEnemy`, `WaterVolume`). Surface types (Normal, Ice), slope classification (Walkable, Steep, Wall). Collision queries: `queryGround()`, `queryCeiling()`, `resolveHorizontalCollisions()`. Water: `findWaterVolume()` for AABB water region detection.
-- `entity.h/.cpp` — Entity system for enemies. Base `Entity` struct with virtual `update()`, spawn/despawn by distance (50/60 unit hysteresis), shared physics helpers (`applyGravity()`, `resolveGround()`, `checkLedgeAhead()`). Concrete enemy types: `GoombaEntity` (patrol/charge/squish), `BobOmbEntity` (patrol/chase/fuse/explode, grabbable from behind), `KoopaTroopaEntity` (patrol/flee, drops blue coin), `BooEntity` (approach when Mario's back turned, transparent when faced). Each has an `EnemyAIState` enum driving its behavior.
+- `entity.h/.cpp` — Entity system for enemies. Base `Entity` struct with virtual `update()`, spawn/despawn by distance (50/60 unit hysteresis), shared physics helpers (`applyGravity()`, `resolveGround()`, `checkLedgeAhead()`). Concrete enemy types: `GoombaEntity` (patrol/charge/squish), `BobOmbEntity` (patrol/chase/fuse/explode, grabbable from behind), `KoopaTroopaEntity` (patrol/flee, drops blue coin), `BooEntity` (approach when Mario's back turned, transparent when faced). Each has an `EnemyAIState` enum driving its behavior. Entities use `AnimState` directly — no `setAnimClips()` needed unlike Mario; animation is driven by `updateAnimState(entity->animState, model.clips, dt)` in the game loop.
 - `entityManager.h/.cpp` — `EntityManager` holds `vector<unique_ptr<Entity>>`. Handles `spawnDespawn()` with distance checks, `update()` all active entities, combat queries: `checkEnemyContact()`, `checkAttackHit()`, `findGrabbable()`, `defeatEnemy()`.
-- `course.h/.cpp` — JSON-driven course loading. `CourseDef` struct parsed from JSON (enemy spawns, collectibles, poles, water, platforms, star definitions). `LoadedCourse` loads visual+collision GLBs, populates a `Phase5World` and `EntityManager` from JSON data. `parseCourseDef()` uses nlohmann/json. Tracks red coin count and 100-coin star state per course session.
+- `course.h/.cpp` — JSON-driven course loading. `CourseDef` struct parsed from JSON (enemy spawns, collectibles, poles, water, platforms, star definitions). `LoadedCourse` loads visual+collision GLBs, populates a `Phase5World` and `EntityManager` from JSON data. `parseCourseDef()` uses nlohmann/json via `platform::readEntireFile()` (declared in `gameLayer.h`, not `platformTools.h`). Tracks red coin count and 100-coin star state per course session.
 - `hud.h/.cpp` — 2D HUD overlay via gl2d. `HudState` tracks course name display timer and low-health flash. `renderHud()` draws 8-segment power meter (pie chart), coin/star counters, lives display, and fading course name text.
 
 ### Shaders
@@ -62,7 +62,16 @@ Each fixed tick: map input → `updatePhase5Objects()` → `mario.update()` → 
 
 Each variable frame: `orbitCamera.update()` → `evaluateAnimState()` (compute skin matrices) → render level geometry (course mesh or test level) → render Phase5 objects/collectibles → render old test enemies → render entity system enemies (skinned models with per-entity animation, Boo transparency via `u_alpha`) → render transparent water planes → render Mario (with invincibility flash) → debug overlays → 2D HUD → ImGui.
 
-Key 1 toggles ImGui debug UI. Key 2 toggles fly camera. Key 5 toggles Bob-omb Battlefield course.
+Key 1 toggles ImGui debug UI. Key 2 toggles fly camera. Key 4 toggles animation viewer. Key 5 toggles Bob-omb Battlefield course. Key 3 is unassigned.
+
+### Adding a New Enemy Type
+
+1. `entity.h` — Add to `EntityType` enum, create `struct NewEnemy : Entity` with constructor + `update()` override
+2. `entity.cpp` — Implement AI state machine in `update()`, add case to `entityTypeName()`
+3. `course.cpp` — Add `parseEntityType()` case and `spawnEntities()` case
+4. `gameLayer.cpp` — Load model in `initGame()`: `enemyModels[(int)EntityType::X] = loadSkinnedGLB(...)`
+5. `tools/models/` — Blender script producing skinned GLB with NLA animation tracks
+6. Course JSON — Add enemy entries with the new type string
 
 ## Key Compile-Time Macros
 
@@ -86,6 +95,7 @@ Uses Dear ImGui v1.92.7-docking. The `thirdparty/imgui-docking/` directory also 
 
 - **Blender is Z-up, engine is Y-up.** The glTF exporter converts automatically, but Blender scripts must use Z for height. A model placed at Blender `(0, 5, 0)` ends up at engine `(0, 0, -5)`, not `(0, 5, 0)`.
 - **`platform::log()` takes a plain `const char*`**, not printf format args. Build strings with `std::string` and call `.c_str()`.
+- **`platform::readEntireFile()` is declared in `gameLayer.h`**, not `platformTools.h`. Include `"gameLayer.h"` to use it. The `std::string` overload: `platform::readEntireFile(name, &succeeded)`.
 - **`platform::Input` keyboard buttons** are limited to A–Z, 0–9, Space, Enter, Escape, arrows, Ctrl, Tab, Shift, Alt. No function keys (F1–F12). Use number keys for debug toggles.
 - **glad was generated without GL_DEBUG_OUTPUT.** The `errorReporting.cpp` is guarded by `#ifdef GL_DEBUG_OUTPUT` and compiles to no-ops.
 - **`#define GLM_ENABLE_EXPERIMENTAL`** must appear before any GLM experimental headers (e.g. `glm/gtx/transform.hpp`, `glm/gtx/quaternion.hpp`). Every `.cpp` that uses GLM experimental features needs this define at the top, or MSVC will error with `#error "GLM: GLM_GTX_... is an experimental extension"`.
@@ -108,7 +118,7 @@ When in doubt: for code one person owns and rarely changes, lean KISS. For inter
 
 ## Asset Pipeline
 
-- **3D models + animations**: Blender 5.1 Python scripts in `tools/models/`. Models built procedurally with armatures and keyframed animations, exported as glTF/GLB. Character models (e.g. `mario.py`) create a bone hierarchy, skin the mesh with vertex groups, define animations as NLA tracks, and export with `export_skins=True, export_nla_strips=True`. Static models (e.g. `test_scene.py`) export geometry only. Output to `resources/models/` (characters, enemies, objects) and `resources/courses/` (level geometry). Run headless: `"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python <script>.py`
+- **3D models + animations**: Blender 5.1 Python scripts in `tools/models/`. Models built procedurally with armatures and keyframed animations, exported as glTF/GLB. Skinned models (`mario.py`, `goomba.py`, `bob_omb.py`, `koopa_troopa.py`, `boo.py`) create a bone hierarchy via `BONE_DEFS`/`BONE_ORDER` dicts, skin the mesh with vertex groups via `BODY_PARTS` list, define animations as NLA tracks, and export with `export_skins=True, export_nla_strips=True`. Static models (`test_scene.py`) and level geometry (`phase5_interactions.py`, `bob_omb_battlefield.py`) use bmesh for procedural geometry with vertex colors. Output to `resources/models/` (characters, enemies, objects) and `resources/courses/` (level geometry). Run headless: `"C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python <script>.py`
 - **Sprites**: spritesheets drawn as single SVGs with all frames on a 64px grid, exported as one PNG via Inkscape (`"C:/Program Files/Inkscape/bin/inkscape.exe" player.svg -o player.png -w 256 -h 256` for a 4x4 sheet). One sheet per category (player, enemy type, tiles, items, etc.). Code indexes frames by row/column source rectangle. Store SVG and PNG in `resources/sprites/`.
 - **Sounds**: Python scripts in `tools/sfx/` using numpy + scipy. Each sound is a parameterized function (waveform synthesis, envelopes, filters). Output WAV to `resources/sfx/`.
 - **Music**: Python scripts in `tools/music/` using `midiutil` to generate MIDI. FluidSynth renders with a soundfont to WAV. ffmpeg converts to OGG. Output to `resources/music/`.

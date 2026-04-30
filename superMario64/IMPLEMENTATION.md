@@ -292,15 +292,15 @@ Collision mesh loading (separate simplified glTF per level). Uniform-grid spatia
 
 Wall jump. Ledge grab + climb. Pole/tree climbing. Object carrying + throwing. Platform types: moving (Mario inherits velocity), falling (delay + respawn), tilting, one-way, breakable (ground pound).
 
-- [ ] Wall jump: Jump toward a wall, press A near it. Mario kicks off away from the wall. Can chain wall jumps between parallel walls.
-- [ ] Ledge grab: Jump near a platform edge. Mario catches the ledge and hangs. Press A or stick up to climb up. Press down or Z to drop.
-- [ ] Pole/tree climbing: Jump onto a pole/tree. Mario grabs and can climb up/down with stick. Press A to jump off.
-- [ ] Object carry: Press B near a carriable object. Mario picks it up. Movement is slower, no punching/diving. Press B to throw, Z to drop.
-- [ ] Moving platform: Stand on it. Mario moves with the platform. Jump off and land back on = still inherits velocity.
-- [ ] Falling platform: Stand on it. Brief delay, then it falls. Respawns after a timer.
-- [ ] Tilting platform: Mario's position on the platform affects its tilt. Tips Mario off if angled too far.
-- [ ] One-way platform: Mario can jump through from below, lands on top as solid.
-- [ ] Breakable platform: Ground pound on it destroys it.
+- [x] Wall jump: Jump toward a wall, press A near it. Mario kicks off away from the wall. Can chain wall jumps between parallel walls.
+- [x] Ledge grab: Jump near a platform edge. Mario catches the ledge and hangs. Press A or stick up to climb up. Press down or Z to drop.
+- [x] Pole/tree climbing: Jump onto a pole/tree. Mario grabs and can climb up/down with stick. Press A to jump off.
+- [x] Object carry: Press B near a carriable object. Mario picks it up. Movement is slower, no punching/diving. Press B to throw, Z to drop.
+- [x] Moving platform: Stand on it. Mario moves with the platform. Jump off and land back on = still inherits velocity.
+- [x] Falling platform: Stand on it. Brief delay, then it falls. Respawns after a timer.
+- [x] Tilting platform: Mario's position on the platform affects its tilt. Tips Mario off if angled too far.
+- [x] One-way platform: Mario can jump through from below, lands on top as solid.
+- [x] Breakable platform: Ground pound on it destroys it.
 
 #### Phase 6 — Health, Damage & HUD
 

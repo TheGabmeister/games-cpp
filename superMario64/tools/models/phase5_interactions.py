@@ -64,7 +64,7 @@ def main():
     ceiling = material("ceiling_collision", (0.65, 0.45, 0.9))
 
     # Phase 4 regression space.
-    quad("flat_ground", -20, -14, 0, 20, 10, 0, normal, (0.35, 0.72, 0.35))
+    quad("flat_ground", -60, -38, 0, 60, 34, 0, normal, (0.35, 0.72, 0.35))
     quad("lower_drop_floor", -8, 11, -2.5, 8, 18, -2.5, normal, (0.22, 0.5, 0.25))
     quad("walkable_slope_25", -16, -8, 0, -10, -2, 2.8, normal, (0.45, 0.78, 0.35))
     quad("steep_slope_40", -8, -8, 0, -2, -2, 5.0, steep, (0.95, 0.72, 0.22))

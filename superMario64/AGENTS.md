@@ -135,22 +135,15 @@ The project uses Dear ImGui `v1.92.7-docking`. The local
 When touching ImGui code or upgrading ImGui, watch for docking API changes and
 local addon compatibility.
 
-## Coding Guidelines
+## Coding Principles
 
-- Prefer existing project patterns over introducing new abstractions.
-- Keep gameplay changes in the game layer when possible.
-- Keep platform changes small and deliberate.
-- Use `RESOURCES_PATH` for assets that need to load at runtime.
-- Use `resources/shaders/`, `resources/models/`, `resources/courses/`,
-  `resources/sfx/`, and `resources/music/` for runtime assets that should be
-  copied next to the executable.
-- The current save plan uses raw versioned structs and save slots in resources
-  during development. Keep the magic/version fields and avoid changing save
-  binary layout casually.
-- Avoid broad formatting churn in third-party code.
-- Do not edit generated build output under `build/` unless explicitly asked.
-- Preserve existing misspellings in macros, target names, and compatibility
-  surfaces unless the task is explicitly to rename them.
+- **C++ game programming best practices**
+- **KISS** — simplest thing that works. No clever patterns where a plain `if` does the job. But a plain `if` that must be copy-pasted into every new feature is not simple — it's a maintenance trap.
+- **YAGNI** — don't build for hypothetical needs. No abstraction layers "for later."
+- **DRY** — remove real duplication, not shape-similar code. Wrong abstraction costs more than repetition.
+- **Locality of change** — adding a new entity, tile, or feature should require changes in as few files as possible. Prefer data-driven dispatch (flags, vtables) over centralized type switches when the set of types is expected to grow. If a new enemy requires editing the orchestrator, the abstraction is missing.
+
+When in doubt: for code one person owns and rarely changes, lean KISS. For interfaces many contributors touch, lean locality of change.
 
 ## Debug Tooling
 

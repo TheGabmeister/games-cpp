@@ -34,7 +34,6 @@ glm::mat4 marioSkinMatrices[MAX_BONES];
 
 InputState inputState;
 
-Mesh groundPlane;
 Mesh cubes[5];
 Mesh testModel;
 bool testModelLoaded = false;
@@ -89,7 +88,6 @@ bool initGame()
 	lineShader = loadShader(RESOURCES_PATH "shaders/debug_line.vert", RESOURCES_PATH "shaders/debug_line.frag");
 	skinnedShader = loadSkinnedShader(RESOURCES_PATH "shaders/skinned.vert", RESOURCES_PATH "shaders/skinned.frag");
 
-	groundPlane = createGroundPlane(50.f, {0.2f, 0.5f, 0.2f});
 	for (int i = 0; i < 5; i++)
 		cubes[i] = createCube(cubeColors[i]);
 
@@ -225,7 +223,6 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	// Level geometry
 	if (!animViewerMode)
 	{
-		renderMesh(basicShader, groundPlane, glm::mat4(1.f), vp);
 		for (int i = 0; i < 5; i++)
 			renderMesh(basicShader, cubes[i], glm::translate(cubePositions[i]), vp);
 		if (testModelLoaded)
@@ -391,7 +388,6 @@ bool gameLogic(float deltaTime, platform::Input &input)
 
 void closeGame()
 {
-	destroyMesh(groundPlane);
 	for (auto &c : cubes) destroyMesh(c);
 	if (testModelLoaded) destroyMesh(testModel);
 	if (phase4CollisionVisualLoaded) destroyMesh(phase4CollisionVisual);

@@ -350,19 +350,7 @@ Base `Entity` class with optional reusable components (Physics, AI, Health, Anim
 - [ ] Enemy contact damages Mario (if not attacking or invincible).
 - [ ] Attacking an enemy while jumping/punching/diving defeats it without taking damage.
 
-#### Phase 9 — Audio System
-
-Thin raudio wrapper: one music stream (OGG, crossfade on transitions), SFX array (WAV, fire-and-forget). Generate initial SFX via Python scripts (movement: footsteps, jumps, land; combat: punch, kick, hit; collectibles: coin, star appear). Generate first music tracks via Python/MIDI pipeline (overworld, boss fight). Hook SFX into existing movement and combat code. Footstep frequency scales with speed.
-
-- [ ] Background music plays on startup (overworld track).
-- [ ] SFX play for: jump, land, footsteps, punch, coin collect.
-- [ ] Footstep SFX frequency scales with Mario's speed (faster = more frequent).
-- [ ] Music crossfades when changing areas (~1 second transition).
-- [ ] Multiple SFX can play simultaneously (e.g., coin + footstep).
-- [ ] No audio crackling, popping, or distortion during normal gameplay.
-- [ ] Muting/pausing: music stops on pause, resumes on unpause.
-
-#### Phase 10 — Bob-omb Battlefield (First Playable Course)
+#### Phase 9 — Bob-omb Battlefield (First Playable Course)
 
 Level geometry + collision mesh from Blender script. Object placement via JSON. All 7 stars: King Bob-omb boss (grab from behind, throw 3×, must stay on summit), red coins, 100-coin star, Chain Chomp (ground-pound post to free), cannon (Bob-omb Buddy NPC unlocks, aim-and-launch UI), remaining mission stars. Star select screen on course entry. Course exit on star collection.
 
@@ -376,6 +364,18 @@ Level geometry + collision mesh from Blender script. Object placement via JSON. 
 - [ ] Cannon: Talk to Bob-omb Buddy NPC to unlock. Enter cannon, aim and launch Mario.
 - [ ] Collecting a star: plays star collect sequence, exits course, returns to hub/menu.
 - [ ] Course exit saves progress (collected star is tracked).
+
+#### Phase 10 — Audio System
+
+Thin raudio wrapper: one music stream (OGG, crossfade on transitions), SFX array (WAV, fire-and-forget). Generate initial SFX via Python scripts (movement: footsteps, jumps, land; combat: punch, kick, hit; collectibles: coin, star appear). Generate first music tracks via Python/MIDI pipeline (overworld, boss fight). Hook SFX into existing movement and combat code. Footstep frequency scales with speed.
+
+- [ ] Background music plays on startup (overworld track).
+- [ ] SFX play for: jump, land, footsteps, punch, coin collect.
+- [ ] Footstep SFX frequency scales with Mario's speed (faster = more frequent).
+- [ ] Music crossfades when changing areas (~1 second transition).
+- [ ] Multiple SFX can play simultaneously (e.g., coin + footstep).
+- [ ] No audio crackling, popping, or distortion during normal gameplay.
+- [ ] Muting/pausing: music stops on pause, resumes on unpause.
 
 #### Phase 11 — Hub World: Peach's Castle
 

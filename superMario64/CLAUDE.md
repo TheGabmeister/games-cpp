@@ -38,20 +38,22 @@ New gameplay code goes in the game layer. The platform layer owns the main loop 
 ### Game Layer Files
 
 - `input.h/.cpp` — `GameInput` struct abstracts raw `platform::Input` into semantic actions (moveDir, moveStrength, jump, crouch, attack, cameraDelta). All gameplay code reads `GameInput`, never raw keys. Mouse camera requires right-click hold; gamepad right stick always works.
-- `mario.h/.cpp` — `Mario` struct with position, velocity, facingAngle, 24-state state machine (`MarioState` enum: idle, walk, run, skid, 6 jump variants, ground pound, crouch, crawl, punch combo, kick, dive, slide kick, landing). `update()` dispatches to per-state handler functions. Tracks jump chain count/timer, jump buffer/coyote timers, punch combo step. `enterState()` centralizes on-enter logic and triggers animation clip changes. Ground detection via `GroundResult` (currently a Y=0 stub, designed to swap in real raycasts later).
+- `mario.h/.cpp` — `Mario` struct with position, velocity, facingAngle, ~49-state state machine (`MarioState` enum). `update()` dispatches to per-state handler functions. `enterState()` centralizes on-enter logic and triggers animation clip changes. Includes health/damage system (`takeDamage()`, `heal()`, `die()`, `respawn()`), invincibility frames, fall damage detection, void death, coin collection with 50/100-coin milestones. Swimming states (`SWIMMING_SURFACE`, `SWIMMING_UNDERWATER`) with air timer, 3D underwater movement, and water entry/exit logic.
 - `animation.h/.cpp` — Skeletal animation system. `Skeleton` (bone hierarchy + inverse bind matrices), `AnimClip` (named clip with channels of keyframes), `AnimPose` (per-bone local transforms), `AnimState` (playback state with crossfade blending). Key functions: `sampleClip()`, `blendPoses()`, `computeSkinMatrices()`, `playClip()`, `updateAnimState()`, `evaluateAnimState()`. `MAX_BONES` = 64.
-- `camera.h/.cpp` — `OrbitCamera` (game camera: follows Mario, auto-centers, player-controlled orbit) and `FlyCamera` (debug camera: WASD + mouse). Shared `getProjectionMatrix()`.
-- `renderer.h/.cpp` — Static meshes (`Vertex3D`/`Mesh`/`Shader`) and skinned meshes (`SkinnedVertex`/`SkinnedMesh`/`SkinnedModel`/`SkinnedShader`). `loadGLB()` for static meshes (first mesh/first primitive). `loadSkinnedGLB()` reads skeleton, bone weights, and all animation clips from glTF. `renderSkinnedMesh()` uploads bone matrices and draws with GPU skinning. Debug grid/axis via `LineMesh`.
+- `camera.h/.cpp` — `OrbitCamera` (game camera: follows Mario, auto-centers, player-controlled orbit, underwater mode with expanded pitch) and `FlyCamera` (debug camera: WASD + mouse). Shared `getProjectionMatrix()`.
+- `renderer.h/.cpp` — Static meshes (`Vertex3D`/`Mesh`/`Shader`) and skinned meshes (`SkinnedVertex`/`SkinnedMesh`/`SkinnedModel`/`SkinnedShader`). `loadGLB()` for static meshes (first mesh/first primitive). `loadSkinnedGLB()` reads skeleton, bone weights, and all animation clips from glTF. `renderSkinnedMesh()` uploads bone matrices and draws with GPU skinning. Debug grid/axis via `LineMesh`. `Shader` struct includes `u_alpha` uniform for transparency.
+- `world.h/.cpp` — `CollisionWorld` (spatial grid of triangles for terrain collision), `Phase5World` (interactive objects: `Phase5Object` platforms, `Phase5Pole` poles, `Collectible` coins/hearts, `TestEnemy`, `WaterVolume`). Surface types (Normal, Ice), slope classification (Walkable, Steep, Wall). Collision queries: `queryGround()`, `queryCeiling()`, `resolveHorizontalCollisions()`. Water: `findWaterVolume()` for AABB water region detection.
+- `hud.h/.cpp` — 2D HUD overlay via gl2d. `HudState` tracks course name display timer and low-health flash. `renderHud()` draws 8-segment power meter (pie chart), coin/star counters, lives display, and fading course name text.
 
 ### Shaders
 
-- `basic3d.vert/.frag` — MVP transform, vertex color, directional diffuse + ambient lighting.
+- `basic3d.vert/.frag` — MVP transform, vertex color, directional diffuse + ambient lighting. Has `u_alpha` uniform (default 1.0) for transparency support.
 - `skinned.vert/.frag` — Same lighting as basic3d, plus per-vertex bone matrix skinning (4 influences, `u_bones[64]` uniform array).
 - `debug_line.vert/.frag` — Simple passthrough for wireframe overlays.
 
 ### Frame Loop
 
-Physics runs on a fixed timestep (1/60s) with an accumulator in `gameLayer.cpp`. Each fixed tick: map input → `mario.update()` → `updateAnimState()`. Each variable frame: `orbitCamera.update()` → `evaluateAnimState()` (compute skin matrices) → render. Key 2 toggles fly camera as a debug override. Key 1 toggles ImGui debug UI.
+Physics runs on a fixed timestep (1/60s) with an accumulator in `gameLayer.cpp`. Each fixed tick: map input → `updatePhase5Objects()` → `mario.update()` → collectible/enemy checks → `hudState.update()` → `updateAnimState()`. Each variable frame: `orbitCamera.update()` → `evaluateAnimState()` (compute skin matrices) → render opaque geometry → render transparent water planes (with GL_BLEND) → render Mario (with invincibility flash) → debug overlays → 2D HUD (gl2d with depth test disabled) → ImGui. Key 1 toggles ImGui debug UI. Key 2 toggles fly camera.
 
 ## Key Compile-Time Macros
 

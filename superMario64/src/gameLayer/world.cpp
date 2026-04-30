@@ -428,6 +428,7 @@ void Phase5World::clear()
 {
 	objects.clear();
 	poles.clear();
+	collectibles.clear();
 	carriedObject = -1;
 }
 
@@ -716,4 +717,99 @@ LineMesh createPhase5DebugMesh(const Phase5World &world)
 	}
 
 	return createLineMesh(vertices);
+}
+
+// ---- Collectibles ----
+
+const char *collectibleTypeName(CollectibleType type)
+{
+	switch (type)
+	{
+	case CollectibleType::YellowCoin: return "YellowCoin";
+	case CollectibleType::RedCoin: return "RedCoin";
+	case CollectibleType::BlueCoin: return "BlueCoin";
+	case CollectibleType::SpinningHeart: return "SpinningHeart";
+	}
+	return "Unknown";
+}
+
+static Collectible makeCoin(CollectibleType type, glm::vec3 position)
+{
+	Collectible c;
+	c.type = type;
+	c.position = position;
+	c.radius = 1.0f;
+	return c;
+}
+
+void initPhase6Collectibles(Phase5World &world)
+{
+	// Yellow coins scattered around the level
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {3.f, 0.8f, 3.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {6.f, 0.8f, 3.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {9.f, 0.8f, 3.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {3.f, 0.8f, -3.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {6.f, 0.8f, -3.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {-3.f, 0.8f, 8.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {0.f, 0.8f, 8.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {3.f, 0.8f, 8.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {-8.f, 0.8f, 0.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::YellowCoin, {-8.f, 0.8f, 3.f}));
+
+	// Red coins on elevated areas
+	world.collectibles.push_back(makeCoin(CollectibleType::RedCoin, {10.f, 3.0f, 13.f}));
+	world.collectibles.push_back(makeCoin(CollectibleType::RedCoin, {-12.f, 5.0f, 5.f}));
+
+	// Blue coin on high platform
+	world.collectibles.push_back(makeCoin(CollectibleType::BlueCoin, {4.f, 2.0f, 13.f}));
+
+	// Spinning heart near start
+	Collectible heart;
+	heart.type = CollectibleType::SpinningHeart;
+	heart.position = {-3.f, 0.8f, 0.f};
+	heart.radius = 1.5f;
+	world.collectibles.push_back(heart);
+}
+
+void updateCollectibles(Phase5World &world, float dt)
+{
+	for (Collectible &c : world.collectibles)
+	{
+		if (!c.active && c.type == CollectibleType::SpinningHeart)
+			c.active = true;
+
+		c.bobTimer += dt;
+		c.spinAngle += 180.f * dt;
+		if (c.spinAngle > 360.f) c.spinAngle -= 360.f;
+	}
+}
+
+int checkCollectiblePickup(Phase5World &world, const glm::vec3 &marioPos)
+{
+	for (int i = 0; i < (int)world.collectibles.size(); i++)
+	{
+		Collectible &c = world.collectibles[i];
+		if (!c.active) continue;
+		if (c.type == CollectibleType::SpinningHeart) continue;
+
+		float dist = glm::length(marioPos - c.position);
+		if (dist < c.radius)
+		{
+			c.active = false;
+			return i;
+		}
+	}
+	return -1;
+}
+
+bool checkSpinningHeart(const Phase5World &world, const glm::vec3 &marioPos)
+{
+	for (const Collectible &c : world.collectibles)
+	{
+		if (!c.active || c.type != CollectibleType::SpinningHeart) continue;
+		float dist = glm::length(marioPos - c.position);
+		if (dist < c.radius)
+			return true;
+	}
+	return false;
 }

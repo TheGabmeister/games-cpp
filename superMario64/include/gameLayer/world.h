@@ -105,10 +105,29 @@ struct Phase5Pole
 	float radius = 0.35f;
 };
 
+enum class CollectibleType
+{
+	YellowCoin,
+	RedCoin,
+	BlueCoin,
+	SpinningHeart,
+};
+
+struct Collectible
+{
+	CollectibleType type = CollectibleType::YellowCoin;
+	glm::vec3 position = {};
+	float radius = 1.0f;
+	bool active = true;
+	float bobTimer = 0.f;
+	float spinAngle = 0.f;
+};
+
 struct Phase5World
 {
 	std::vector<Phase5Object> objects;
 	std::vector<Phase5Pole> poles;
+	std::vector<Collectible> collectibles;
 	int carriedObject = -1;
 
 	void clear();
@@ -139,3 +158,9 @@ void setCarriedObject(Phase5World &world, int objectIndex, bool carried);
 void moveCarriedObject(Phase5World &world, int objectIndex, const glm::vec3 &position);
 void throwCarriedObject(Phase5World &world, int objectIndex, const glm::vec3 &velocity);
 LineMesh createPhase5DebugMesh(const Phase5World &world);
+
+const char *collectibleTypeName(CollectibleType type);
+void initPhase6Collectibles(Phase5World &world);
+void updateCollectibles(Phase5World &world, float dt);
+int checkCollectiblePickup(Phase5World &world, const glm::vec3 &marioPos);
+bool checkSpinningHeart(const Phase5World &world, const glm::vec3 &marioPos);

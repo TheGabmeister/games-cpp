@@ -42,6 +42,8 @@ const char *marioStateName(MarioState s)
 	case MarioState::THROW: return "THROW";
 	case MarioState::DROP: return "DROP";
 	case MarioState::LANDING: return "LANDING";
+	case MarioState::KNOCKBACK: return "KNOCKBACK";
+	case MarioState::DEATH: return "DEATH";
 	case MarioState::COUNT: break;
 	}
 	return "UNKNOWN";
@@ -102,6 +104,8 @@ static const char *stateToClipName(MarioState s)
 	case MarioState::THROW: return "throw";
 	case MarioState::DROP: return "drop";
 	case MarioState::LANDING: return "landing";
+	case MarioState::KNOCKBACK: return "knockback";
+	case MarioState::DEATH: return "death";
 	case MarioState::COUNT: break;
 	}
 	return "idle";
@@ -252,6 +256,12 @@ void Mario::enterState(MarioState newState)
 	case MarioState::THROW:
 	case MarioState::DROP:
 		actionTimer = 0.2f;
+		break;
+	case MarioState::KNOCKBACK:
+		stateTimer = 0.5f;
+		break;
+	case MarioState::DEATH:
+		deathTimer = DEATH_DURATION;
 		break;
 	default:
 		break;
@@ -477,7 +487,8 @@ static bool isAirborneState(MarioState state)
 		state == MarioState::FREEFALL || state == MarioState::GROUND_POUND_SPIN ||
 		state == MarioState::GROUND_POUND_FALL || state == MarioState::JUMP_KICK ||
 		state == MarioState::DIVE || state == MarioState::SLIDE_KICK ||
-		state == MarioState::WALL_SLIDE || state == MarioState::WALL_JUMP;
+		state == MarioState::WALL_SLIDE || state == MarioState::WALL_JUMP ||
+		state == MarioState::KNOCKBACK || state == MarioState::DEATH;
 }
 
 void Mario::resolveCollision(const CollisionWorld *world, Phase5World *phase5World, float dt, const glm::vec3 &previousPosition)
@@ -563,6 +574,20 @@ void Mario::resolveCollision(const CollisionWorld *world, Phase5World *phase5Wor
 
 		if (!onGround)
 		{
+			// Fall damage check
+			float fallDistance = airborneMaxY - position.y;
+			if (fallDistance > FALL_DAMAGE_THRESHOLD && state != MarioState::DEATH)
+			{
+				onGround = true;
+				takeDamage(FALL_DAMAGE_SEGMENTS, position);
+				if (!isDead())
+				{
+					enterState(MarioState::GROUND_POUND_LAND);
+					stateTimer = 0.4f;
+				}
+				return;
+			}
+
 			// Just landed — jumpChainCount was already set in tryGroundJump
 
 			jumpChainTimer = 0.f;
@@ -1070,12 +1095,134 @@ void Mario::updateLanding(const GameInput &input, float dt, const glm::vec3 &cam
 		state = MarioState::IDLE;
 }
 
+void Mario::updateKnockback(const GameInput &input, float dt, const glm::vec3 &cameraForward)
+{
+	applyGravity(input, dt);
+	stateTimer -= dt;
+	if (onGround && stateTimer <= 0.f)
+		enterState(MarioState::IDLE);
+}
+
+void Mario::updateDeath(const GameInput &input, float dt, const glm::vec3 &cameraForward)
+{
+	applyGravity(input, dt);
+	deathTimer -= dt;
+	if (deathTimer <= 0.f)
+	{
+		lives--;
+		if (lives > 0)
+			respawn();
+	}
+}
+
+// ---- Health & Damage ----
+
+void Mario::takeDamage(int segments, const glm::vec3 &sourcePos)
+{
+	if (isInvincible() || isDead())
+		return;
+
+	health -= segments;
+	if (health < 0) health = 0;
+
+	if (health <= 0)
+	{
+		die();
+		return;
+	}
+
+	invincibilityTimer = INVINCIBILITY_DURATION;
+
+	glm::vec3 knockDir = position - sourcePos;
+	knockDir.y = 0.f;
+	float len = glm::length(knockDir);
+	if (len > 0.001f)
+		knockDir /= len;
+	else
+		knockDir = -getFacingForward();
+
+	velocity = knockDir * KNOCKBACK_SPEED + glm::vec3(0.f, 10.f, 0.f);
+	onGround = false;
+	carriedObject = -1;
+	activePole = -1;
+	enterState(MarioState::KNOCKBACK);
+}
+
+void Mario::heal(int segments)
+{
+	health = std::min(health + segments, maxHealth);
+}
+
+void Mario::collectCoin(int value)
+{
+	int prevCoins = coins;
+	coins += value;
+	heal(value);
+
+	if (prevCoins < 50 && coins >= 50)
+		lives++;
+	if (prevCoins < 100 && coins >= 100)
+		lives++;
+}
+
+void Mario::die()
+{
+	health = 0;
+	velocity = {0.f, 18.f, 0.f};
+	onGround = false;
+	carriedObject = -1;
+	activePole = -1;
+	enterState(MarioState::DEATH);
+}
+
+bool Mario::isInvincible() const
+{
+	return invincibilityTimer > 0.f;
+}
+
+bool Mario::isDead() const
+{
+	return state == MarioState::DEATH;
+}
+
+void Mario::respawn()
+{
+	position = spawnPosition;
+	velocity = {};
+	health = maxHealth;
+	invincibilityTimer = 0.f;
+	deathTimer = 0.f;
+	airborneMaxY = spawnPosition.y;
+	onGround = true;
+	carriedObject = -1;
+	activePole = -1;
+	currentPlatform = -1;
+	enterState(MarioState::IDLE);
+}
+
 // ---- Main Update ----
 
 void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForward,
 	const CollisionWorld *world, Phase5World *phase5World)
 {
 	groundPoundImpact = false;
+
+	if (invincibilityTimer > 0.f)
+		invincibilityTimer = std::max(0.f, invincibilityTimer - dt);
+
+	if (!onGround)
+		airborneMaxY = std::max(airborneMaxY, position.y);
+	else
+		airborneMaxY = position.y;
+
+	if (isDead())
+	{
+		updateDeath(input, dt, cameraForward);
+		position += velocity * dt;
+		resolveCollision(world, phase5World, dt, position);
+		return;
+	}
+
 	updateInputBuffers(input, dt);
 	glm::vec3 previousPosition = position;
 
@@ -1173,8 +1320,17 @@ void Mario::update(const GameInput &input, float dt, const glm::vec3 &cameraForw
 	case MarioState::BELLY_SLIDE:        updateBellySlide(input, dt, cameraForward); break;
 	case MarioState::SLIDE_KICK:         updateSlideKick(input, dt, cameraForward); break;
 	case MarioState::LANDING:            updateLanding(input, dt, cameraForward); break;
+	case MarioState::KNOCKBACK:          updateKnockback(input, dt, cameraForward); break;
+	case MarioState::DEATH:              break;
 	}
 
 	position += velocity * dt;
+
+	if (position.y < VOID_DEATH_Y && !isDead())
+	{
+		die();
+		return;
+	}
+
 	resolveCollision(world, phase5World, dt, previousPosition);
 }

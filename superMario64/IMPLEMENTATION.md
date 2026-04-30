@@ -306,18 +306,18 @@ Wall jump. Ledge grab + climb. Pole/tree climbing. Object carrying + throwing. P
 
 8-segment power meter. Damage from contact/hazards (1–3 segments). Knockback impulse + invincibility frames. Fall damage threshold. Void/pit instant death. Coins (yellow/red/blue) as collectibles + healing. Spinning Heart. HUD overlay via gl2d: health, coin counter, star counter, lives.
 
-- [ ] HUD visible: power meter (top-left), star counter, coin counter (top-right).
-- [ ] Power meter shows 8 segments at full health.
-- [ ] Touching an enemy: Mario takes damage (1 segment), knockback impulse, invincibility frames (flashing) for ~2 seconds.
-- [ ] During invincibility: no further damage from any source.
-- [ ] Falling from height > ~11 units: fall damage (3 segments) + brief stun on landing.
-- [ ] Falling into void (below the level): instant death regardless of health.
-- [ ] Collecting yellow coin: +1 health segment, +1 coin counter.
-- [ ] Collecting red coin: +2 health, +2 coins. Collecting blue coin: +5 health, +5 coins.
-- [ ] Spinning Heart: running through restores health continuously.
-- [ ] At 0 health: Mario death animation, lose a life. Lives counter decrements.
-- [ ] Power meter flashes red at 2 or fewer segments.
-- [ ] Course name/star name appears at bottom-center on course entry, fades after ~3 seconds.
+- [x] HUD visible: power meter (top-left), star counter, coin counter (top-right).
+- [x] Power meter shows 8 segments at full health.
+- [x] Touching an enemy: Mario takes damage (1 segment), knockback impulse, invincibility frames (flashing) for ~2 seconds.
+- [x] During invincibility: no further damage from any source.
+- [x] Falling from height > ~11 units: fall damage (3 segments) + brief stun on landing.
+- [x] Falling into void (below the level): instant death regardless of health.
+- [x] Collecting yellow coin: +1 health segment, +1 coin counter.
+- [x] Collecting red coin: +2 health, +2 coins. Collecting blue coin: +5 health, +5 coins.
+- [x] Spinning Heart: running through restores health continuously.
+- [x] At 0 health: Mario death animation, lose a life. Lives counter decrements.
+- [x] Power meter flashes red at 2 or fewer segments.
+- [x] Course name/star name appears at bottom-center on course entry, fades after ~3 seconds.
 
 #### Phase 7 — Swimming & Water
 

@@ -16,6 +16,7 @@
 #include "mario.h"
 #include "animation.h"
 #include "world.h"
+#include "hud.h"
 
 gl2d::Renderer2D renderer2d;
 
@@ -50,11 +51,21 @@ Phase5World phase5World;
 LineMesh gridMesh;
 LineMesh axisMesh;
 
+Mesh yellowCoinMesh;
+Mesh redCoinMesh;
+Mesh blueCoinMesh;
+Mesh heartMesh;
+
+gl2d::Font hudFont;
+HudState hudState;
+
 bool showGrid = true;
 bool showAxes = true;
 bool showDebugUI = true;
 bool showAnimDebugger = false;
 bool animViewerMode = false;
+
+static int frameCounter = 0;
 
 static AnimState debugAnimState;
 static bool debugAnimPaused = false;
@@ -102,6 +113,15 @@ bool initGame()
 		collisionWireMeshLoaded = (collisionWireMesh.vao != 0);
 	}
 	initPhase5TestObjects(phase5World);
+	initPhase6Collectibles(phase5World);
+
+	yellowCoinMesh = createCube({1.f, 0.85f, 0.f});
+	redCoinMesh = createCube({1.f, 0.2f, 0.2f});
+	blueCoinMesh = createCube({0.2f, 0.4f, 1.f});
+	heartMesh = createCube({1.f, 0.4f, 0.7f});
+
+	hudFont.createFromFile(RESOURCES_PATH "roboto_black.ttf");
+	hudState.showCourseName("Bob-omb Battlefield", "Star 1: Big Bob-omb on the Summit");
 
 	marioModel = loadSkinnedGLB(RESOURCES_PATH "models/mario.glb");
 	marioModelLoaded = (marioModel.mesh.vao != 0);
@@ -177,6 +197,38 @@ bool gameLogic(float deltaTime, platform::Input &input)
 			updatePhase5Objects(phase5World, FIXED_DT, mario.position, mario.groundPoundImpact);
 			mario.update(currentInput, FIXED_DT, camFwd, collisionWorldLoaded ? &collisionWorld : nullptr, &phase5World);
 
+			updateCollectibles(phase5World, FIXED_DT);
+
+			int pickup = checkCollectiblePickup(phase5World, mario.position);
+			while (pickup >= 0)
+			{
+				switch (phase5World.collectibles[pickup].type)
+				{
+				case CollectibleType::YellowCoin: mario.collectCoin(1); break;
+				case CollectibleType::RedCoin: mario.collectCoin(2); break;
+				case CollectibleType::BlueCoin: mario.collectCoin(5); break;
+				default: break;
+				}
+				pickup = checkCollectiblePickup(phase5World, mario.position);
+			}
+
+			if (checkSpinningHeart(phase5World, mario.position))
+			{
+				mario.healAccumulator += 4.f * FIXED_DT;
+				if (mario.healAccumulator >= 1.f)
+				{
+					int segments = (int)mario.healAccumulator;
+					mario.heal(segments);
+					mario.healAccumulator -= (float)segments;
+				}
+			}
+			else
+			{
+				mario.healAccumulator = 0.f;
+			}
+
+			hudState.update(FIXED_DT);
+
 			if (marioModelLoaded)
 				updateAnimState(mario.animState, marioModel.clips, FIXED_DT);
 		}
@@ -243,10 +295,39 @@ bool gameLogic(float deltaTime, platform::Input &input)
 				glm::scale(glm::vec3(pole.radius * 2.f, pole.height, pole.radius * 2.f));
 			renderMesh(basicShader, cubes[3], model, vp);
 		}
+
+		// Collectibles
+		for (const Collectible &c : phase5World.collectibles)
+		{
+			if (!c.active) continue;
+			float bobY = sinf(c.bobTimer * 2.f) * 0.15f;
+			glm::mat4 model = glm::translate(c.position + glm::vec3(0.f, bobY, 0.f))
+				* glm::rotate(glm::radians(c.spinAngle), glm::vec3(0, 1, 0));
+			switch (c.type)
+			{
+			case CollectibleType::YellowCoin:
+				renderMesh(basicShader, yellowCoinMesh, model * glm::scale(glm::vec3(0.35f, 0.35f, 0.08f)), vp);
+				break;
+			case CollectibleType::RedCoin:
+				renderMesh(basicShader, redCoinMesh, model * glm::scale(glm::vec3(0.4f, 0.4f, 0.08f)), vp);
+				break;
+			case CollectibleType::BlueCoin:
+				renderMesh(basicShader, blueCoinMesh, model * glm::scale(glm::vec3(0.4f, 0.4f, 0.08f)), vp);
+				break;
+			case CollectibleType::SpinningHeart:
+				renderMesh(basicShader, heartMesh, model * glm::scale(glm::vec3(0.5f, 0.5f, 0.12f)), vp);
+				break;
+			}
+		}
 	}
 
-	// Mario (skinned)
-	if (marioModelLoaded)
+	// Mario (skinned) — flash during invincibility
+	frameCounter++;
+	bool renderMarioVisible = true;
+	if (mario.isInvincible())
+		renderMarioVisible = ((frameCounter / 4) % 2) == 0;
+
+	if (marioModelLoaded && renderMarioVisible)
 	{
 		glm::mat4 marioModelMat;
 		if (animViewerMode)
@@ -264,6 +345,18 @@ bool gameLogic(float deltaTime, platform::Input &input)
 	if (showGrid) renderLines(lineShader, gridMesh, vp);
 	if (showAxes) renderLines(lineShader, axisMesh, vp);
 	glLineWidth(1.f);
+
+	// 2D HUD overlay
+	if (!animViewerMode && !useFlyCam)
+	{
+		glDisable(GL_DEPTH_TEST);
+		renderer2d.updateWindowMetrics(w, h);
+		renderHud(renderer2d, hudFont, mario.health, mario.maxHealth,
+			mario.coins, mario.stars, mario.lives, mario.invincibilityTimer,
+			hudState, w, h);
+		renderer2d.flush();
+		glEnable(GL_DEPTH_TEST);
+	}
 
 	// ImGui
 	if (showDebugUI && !animViewerMode)
@@ -305,6 +398,25 @@ bool gameLogic(float deltaTime, platform::Input &input)
 		ImGui::Text("Phase5: objects=%d poles=%d carried=%d platform=%d wall=%.2f",
 			(int)phase5World.objects.size(), (int)phase5World.poles.size(),
 			mario.carriedObject, mario.currentPlatform, mario.wallContactTimer);
+		ImGui::Separator();
+
+		ImGui::Text("Health: %d/%d  Coins: %d  Stars: %d  Lives: %d",
+			mario.health, mario.maxHealth, mario.coins, mario.stars, mario.lives);
+		ImGui::Text("Invincible: %.2f  AirMaxY: %.2f",
+			mario.invincibilityTimer, mario.airborneMaxY);
+		if (ImGui::Button("Damage"))
+			mario.takeDamage(1, mario.position + glm::vec3(1, 0, 0));
+		ImGui::SameLine();
+		if (ImGui::Button("Heal"))
+			mario.heal(8);
+		ImGui::SameLine();
+		if (ImGui::Button("+Coin"))
+			mario.collectCoin(1);
+		ImGui::SameLine();
+		if (ImGui::Button("Kill"))
+			mario.die();
+		ImGui::Separator();
+
 		ImGui::Text("Press 1: toggle debug UI");
 		ImGui::Text("Press 2: fly camera (%s)", useFlyCam ? "ON" : "OFF");
 		ImGui::Text("Press 4: anim viewer (%s)", animViewerMode ? "ON" : "OFF");
@@ -389,6 +501,10 @@ bool gameLogic(float deltaTime, platform::Input &input)
 void closeGame()
 {
 	for (auto &c : cubes) destroyMesh(c);
+	destroyMesh(yellowCoinMesh);
+	destroyMesh(redCoinMesh);
+	destroyMesh(blueCoinMesh);
+	destroyMesh(heartMesh);
 	if (testModelLoaded) destroyMesh(testModel);
 	if (phase4CollisionVisualLoaded) destroyMesh(phase4CollisionVisual);
 	if (marioModelLoaded) destroySkinnedMesh(marioModel.mesh);
@@ -398,4 +514,5 @@ void closeGame()
 	destroyShader(basicShader);
 	destroyShader(lineShader);
 	destroySkinnedShader(skinnedShader);
+	hudFont.cleanup();
 }

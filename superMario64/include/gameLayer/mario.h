@@ -42,6 +42,8 @@ enum class MarioState
 	THROW,
 	DROP,
 	LANDING,
+	KNOCKBACK,
+	DEATH,
 	COUNT,
 };
 
@@ -89,6 +91,18 @@ struct Mario
 	// General-purpose state timer
 	float stateTimer = 0.f;
 
+	// Health & damage
+	int health = 8;
+	int maxHealth = 8;
+	int lives = 4;
+	int coins = 0;
+	int stars = 0;
+	float invincibilityTimer = 0.f;
+	float airborneMaxY = 0.f;
+	float deathTimer = 0.f;
+	glm::vec3 spawnPosition = {0.f, 0.f, 0.f};
+	float healAccumulator = 0.f;
+
 	// Movement constants
 	static constexpr float WALK_SPEED = 8.f;
 	static constexpr float RUN_SPEED = 16.f;
@@ -129,11 +143,27 @@ struct Mario
 	static constexpr float WALL_JUMP_VERTICAL = 24.f;
 	static constexpr float POLE_CLIMB_SPEED = 4.f;
 
+	// Health & damage constants
+	static constexpr float INVINCIBILITY_DURATION = 2.f;
+	static constexpr float FALL_DAMAGE_THRESHOLD = 11.f;
+	static constexpr int FALL_DAMAGE_SEGMENTS = 3;
+	static constexpr float VOID_DEATH_Y = -20.f;
+	static constexpr float DEATH_DURATION = 2.f;
+	static constexpr float KNOCKBACK_SPEED = 12.f;
+
 	AnimState animState;
 
 	void update(const GameInput &input, float dt, const glm::vec3 &cameraForward,
 		const CollisionWorld *world = nullptr, Phase5World *phase5World = nullptr);
 	void setAnimClips(const SkinnedModel &model);
+
+	void takeDamage(int segments, const glm::vec3 &sourcePos);
+	void heal(int segments);
+	void collectCoin(int value);
+	void die();
+	bool isInvincible() const;
+	bool isDead() const;
+	void respawn();
 
 private:
 	void updateInputBuffers(const GameInput &input, float dt);
@@ -157,6 +187,8 @@ private:
 	void updateCarry(const GameInput &input, float dt, const glm::vec3 &cameraForward, Phase5World *phase5World);
 	void updateThrowDrop(const GameInput &input, float dt, const glm::vec3 &cameraForward, Phase5World *phase5World);
 	void updateLanding(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateKnockback(const GameInput &input, float dt, const glm::vec3 &cameraForward);
+	void updateDeath(const GameInput &input, float dt, const glm::vec3 &cameraForward);
 
 	void resolveCollision(const CollisionWorld *world, Phase5World *phase5World, float dt, const glm::vec3 &previousPosition);
 	void tryGroundJump(const GameInput &input, const glm::vec3 &cameraForward);
